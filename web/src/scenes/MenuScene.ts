@@ -15,6 +15,7 @@ export class MenuScene extends Phaser.Scene {
   private controlsGroup!: Phaser.GameObjects.Container
 
   private gpCursor!: Phaser.GameObjects.Text
+  private padStatus!: Phaser.GameObjects.Text
   private activeItems: MenuItem[] = []
   private focusIdx = 0
 
@@ -29,10 +30,35 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '14px', fontFamily: FONT, color: CLR_TITLE,
     }).setOrigin(1, 0.5).setDepth(20).setVisible(false)
 
+    this.padStatus = this.add.text(width / 2, height - 10, '', {
+      fontSize: '8px', fontFamily: FONT, color: '#44cc88',
+    }).setOrigin(0.5, 1).setDepth(20)
+
     this.buildMain()
     this.buildControls()
     this.showScreen('main')
     this.setupGamepad()
+    this.setupControllerStatus()
+  }
+
+  private setupControllerStatus() {
+    const refresh = () => {
+      const pads = this.input.gamepad?.gamepads ?? []
+      const connected = pads.some(p => p != null)
+      if (connected) {
+        this.padStatus.setText('● CONTROLLER CONNECTED').setColor('#44cc88')
+      } else if ('ontouchstart' in window) {
+        this.padStatus.setText('● PRESS ANY BUTTON ON YOUR CONTROLLER TO CONNECT').setColor('#ffe066')
+      } else {
+        this.padStatus.setText('')
+      }
+    }
+
+    refresh()
+    this.input.gamepad?.on(Phaser.Input.Gamepad.Events.CONNECTED,    refresh)
+    this.input.gamepad?.on(Phaser.Input.Gamepad.Events.DISCONNECTED, refresh)
+    // Re-check every 2 s in case the event fired before this scene was ready
+    this.time.addEvent({ delay: 2000, loop: true, callback: refresh })
   }
 
   private setupGamepad() {
