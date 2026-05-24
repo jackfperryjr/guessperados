@@ -4,26 +4,39 @@ import { BootScene } from '../scenes/BootScene'
 
 const MOVE_SPEED        = 220
 const JUMP_VELOCITY     = -520
-const FLOAT_GRAVITY     = -700   // cancels most world gravity while floating
+const FLOAT_GRAVITY     = -700
 const INHALE_RANGE      = 190
-const KILL_RANGE        = 60     // unused without impostor; kept for future
-const PLAYER_CARRY_MS   = 1000   // how long until auto-spit
+const KILL_RANGE        = 60
+const PLAYER_CARRY_MS   = 1000
 const SPIT_VX           = 540
 const SPIT_VY           = -320
+
+export const ABILITY_AMMO: Record<AbilityType, number> = {
+  [AbilityType.None]:     0,
+  [AbilityType.Fire]:     10,
+  [AbilityType.Bomb]:     5,
+  [AbilityType.Electric]: 1,
+  [AbilityType.Ice]:      10,
+}
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   readonly playerId: number
 
   hearts        = 3
   currentAbility: AbilityType = AbilityType.None
+  abilityAmmo   = 0
   isAlive       = true
   isInhaled     = false
+  speedMultiplier  = 1.0
+  controlsReversed = false
 
   private isFloating    = false
   private isInhaling    = false
   private invincible    = false
   private inhaledObject: Phaser.Physics.Arcade.Sprite | null = null
   private animPrefix: string | null = null
+  private rapierSprite: Phaser.GameObjects.Image | null = null
+  private isSwinging = false
 
   constructor(scene: Phaser.Scene, x: number, y: number, id: number) {
     const sheetKey = BootScene.getSheetKey(id)
@@ -39,12 +52,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)
     body.setSize(26, 30)
+
+    if (scene.textures.exists('rapier')) {
+      this.rapierSprite = scene.add.image(x - 3, y + 13, 'rapier')
+        .setOrigin(0.15, 0.5)
+        .setDepth(1)
+        .setVisible(false)
+    }
   }
 
   // ── movement ────────────────────────────────────────────────────────────────
 
-  moveLeft()       { ;(this.body as Phaser.Physics.Arcade.Body).setVelocityX(-MOVE_SPEED); this.setFlipX(true)  }
-  moveRight()      { ;(this.body as Phaser.Physics.Arcade.Body).setVelocityX( MOVE_SPEED); this.setFlipX(false) }
+  moveLeft() {
+    const dir = this.controlsReversed ? 1 : -1
+    ;(this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * MOVE_SPEED * this.speedMultiplier)
+    this.setFlipX(this.controlsReversed ? false : true)
+  }
+  moveRight() {
+    const dir = this.controlsReversed ? -1 : 1
+    ;(this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * MOVE_SPEED * this.speedMultiplier)
+    this.setFlipX(this.controlsReversed ? true : false)
+  }
   stopHorizontal() { ;(this.body as Phaser.Physics.Arcade.Body).setVelocityX(0) }
 
   jump() {
@@ -59,8 +87,24 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   jumpReleased() { this.isFloating = false }
 
+  applyTempEffect(type: 'fast' | 'reverse', ms: number) {
+    if (type === 'fast') {
+      this.speedMultiplier = 1.7
+      this.scene.time.delayedCall(ms, () => { if (this.active) this.speedMultiplier = 1.0 })
+    } else {
+      this.controlsReversed = true
+      this.setTint(0xcc00ff)
+      this.scene.time.delayedCall(ms, () => {
+        if (this.active) { this.controlsReversed = false; this.clearTint() }
+      })
+    }
+  }
+
   update() {
-    if (!this.isAlive || this.isInhaled) return
+    if (!this.isAlive || this.isInhaled) {
+      this.rapierSprite?.setVisible(false)
+      return
+    }
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setGravityY(this.isFloating ? FLOAT_GRAVITY : 0)
     if (body.blocked.down) this.isFloating = false
@@ -70,6 +114,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     this.updateAnimation()
+    this.updateRapierSprite()
+  }
+
+  private updateRapierSprite() {
+    if (!this.rapierSprite) return
+    if (this.hasInhaled || this.isInhaling) {
+      this.rapierSprite.setVisible(false)
+      return
+    }
+    const facingRight = !this.flipX
+    const dir = facingRight ? 1 : -1
+    this.rapierSprite
+      .setPosition(this.x + dir * 2 - 5, this.y + 13)
+      .setVisible(true)
+    if (!this.isSwinging) {
+      this.rapierSprite.setAngle(facingRight ? -20 : 200)
+    }
   }
 
   private updateAnimation() {
@@ -94,13 +155,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   setInhaling(active: boolean) { this.isInhaling = active }
 
-  get inhaling()        { return this.isInhaling }
-  get hasInhaled()      { return this.inhaledObject !== null }
-  inhaleRange()         { return INHALE_RANGE }
-  killRange()           { return KILL_RANGE }
+  get inhaling()   { return this.isInhaling }
+  get hasInhaled() { return this.inhaledObject !== null }
+  inhaleRange()    { return INHALE_RANGE }
+  killRange()      { return KILL_RANGE }
 
   swallowEnemy(ability: AbilityType) {
     this.currentAbility = ability
+    this.abilityAmmo = ABILITY_AMMO[ability]
     this.isInhaling = false
     this.emit('abilityChanged', ability)
   }
@@ -132,22 +194,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setScale(1)
 
     if ((obj as unknown as Player).isInhaled !== undefined) {
-      // It's another player
       const other = obj as unknown as Player
       other.isInhaled = false
       other.setVisible(true)
       other.setPosition(this.x + (this.flipX ? -50 : 50), this.y)
       ;(other.body as Phaser.Physics.Arcade.Body).setEnable(true)
       ;(other.body as Phaser.Physics.Arcade.Body).setVelocity(
-        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY
+        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY,
       )
     } else {
-      // It's an object/crate — launch as projectile
       obj.setVisible(true)
       obj.setPosition(this.x + (this.flipX ? -50 : 50), this.y)
       ;(obj.body as Phaser.Physics.Arcade.Body).setEnable(true)
       ;(obj.body as Phaser.Physics.Arcade.Body).setVelocity(
-        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY
+        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY,
       )
       this.emit('objectSpit', obj)
     }
@@ -159,9 +219,39 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   useAbility() {
     if (this.currentAbility === AbilityType.None) return
-    this.emit('useAbility', this.currentAbility, this)
-    this.currentAbility = AbilityType.None
-    this.emit('abilityChanged', AbilityType.None)
+    const ability = this.currentAbility
+    this.emit('useAbility', ability, this)
+    this.abilityAmmo--
+    if (this.abilityAmmo <= 0) {
+      this.currentAbility = AbilityType.None
+      this.abilityAmmo = 0
+      this.emit('abilityChanged', AbilityType.None)
+    } else {
+      this.emit('abilityAmmoChanged', this.abilityAmmo)
+    }
+  }
+
+  useRapier() {
+    this.emit('rapierSwing', this)
+    this.swingRapierSprite()
+  }
+
+  private swingRapierSprite() {
+    if (!this.rapierSprite || this.isSwinging) return
+    this.isSwinging = true
+    const facingRight = !this.flipX
+    const baseAngle = facingRight ? -20 : 200
+    this.rapierSprite.setAngle(baseAngle - 65)
+    this.scene.tweens.add({
+      targets: this.rapierSprite,
+      angle: baseAngle + 65,
+      duration: 160,
+      ease: 'Power1',
+      onComplete: () => {
+        this.isSwinging = false
+        this.rapierSprite?.setAngle(baseAngle)
+      },
+    })
   }
 
   // ── damage ──────────────────────────────────────────────────────────────────
@@ -184,8 +274,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.hearts <= 0) this.die()
   }
 
-  takeDamage(_amount: number, _type: DamageType) {
-    this.hitByEnemy()
+  takeDamage(_amount: number, _type: DamageType) { this.hitByEnemy() }
+
+  destroy(fromScene?: boolean) {
+    this.rapierSprite?.destroy()
+    this.rapierSprite = null
+    super.destroy(fromScene)
   }
 
   stun(ms: number) {

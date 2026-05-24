@@ -3,6 +3,14 @@ import { AbilityType } from '../types'
 
 const WALK_SPEED = 80
 
+const ATTACK_INTERVAL: Record<AbilityType, number> = {
+  [AbilityType.None]:     0,       // pinklady boss — handled separately
+  [AbilityType.Fire]:     2800,
+  [AbilityType.Bomb]:     4200,
+  [AbilityType.Electric]: 3400,
+  [AbilityType.Ice]:      3000,
+}
+
 const ENEMY_SHEET: Record<AbilityType, string> = {
   [AbilityType.None]:     'sheet-enemy-pinklady',
   [AbilityType.Fire]:     'sheet-enemy-dragon',
@@ -22,26 +30,32 @@ const ENEMY_BODY: Record<AbilityType, [number, number]> = {
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly abilityType: AbilityType
+  readonly flying: boolean
   private walkDir = 1
   private beingPulled = false
   private readonly animKey: string
+  private attackTimer: number
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
+    const isFlying = ability === AbilityType.Fire
     const sheetKey = ENEMY_SHEET[ability]
-    super(scene, x, y, sheetKey)
+    const spawnY   = isFlying ? Math.min(y, 340) : y
+    super(scene, x, spawnY, sheetKey)
     this.abilityType = ability
+    this.flying = isFlying
     this.animKey = sheetKey
+    this.attackTimer = ATTACK_INTERVAL[ability] * (0.4 + Math.random() * 0.6)
 
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
-    // pinklady sheet is 128×128 — scale it down to match other enemies
     if (ability === AbilityType.None) this.setScale(84 / 128)
 
     const [bw, bh] = ENEMY_BODY[ability]
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)
     body.setSize(bw, bh)
+    if (isFlying) body.setAllowGravity(false)
 
     this.play(`${this.animKey}-walk`)
   }
@@ -49,10 +63,32 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   update() {
     if (this.beingPulled) return
     const body = this.body as Phaser.Physics.Arcade.Body
+
+    if (this.flying) {
+      if (body.blocked.left)  this.walkDir =  1
+      if (body.blocked.right) this.walkDir = -1
+      body.setVelocityX(WALK_SPEED * this.walkDir)
+      body.setVelocityY(Math.sin(this.scene.time.now / 600) * 40)
+      this.setFlipX(this.walkDir > 0)
+      return
+    }
+
     if (body.blocked.left)  this.walkDir =  1
     if (body.blocked.right) this.walkDir = -1
     body.setVelocityX(WALK_SPEED * this.walkDir)
     this.setFlipX(this.walkDir > 0)
+  }
+
+  /** Returns true once per attack cycle; GameScene handles the actual projectile. */
+  tryAttack(dt: number): boolean {
+    const interval = ATTACK_INTERVAL[this.abilityType]
+    if (interval === 0) return false
+    this.attackTimer -= dt
+    if (this.attackTimer <= 0) {
+      this.attackTimer = interval * (0.7 + Math.random() * 0.6)
+      return true
+    }
+    return false
   }
 
   pullToward(tx: number, ty: number, speed: number) {
