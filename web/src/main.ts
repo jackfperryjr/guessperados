@@ -27,4 +27,10 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, IntroScene, MenuScene, GameScene, VictoryScene, LevelCompleteScene, LobbyScene],
 }
 
+// iOS/Safari gates the Gamepad API behind a user gesture. Calling
+// getGamepads() from inside a touch handler unlocks it for the session.
+document.addEventListener('touchstart', () => {
+  try { navigator.getGamepads() } catch (_) { /* ignore */ }
+}, { once: true, passive: true })
+
 new Phaser.Game(config)
