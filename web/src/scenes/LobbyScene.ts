@@ -27,6 +27,12 @@ export class LobbyScene extends Phaser.Scene {
   private slotTexts: Phaser.GameObjects.Text[] = []
   private waitStatus!: Phaser.GameObjects.Text
   private startBtn!: Phaser.GameObjects.Text
+  private leaveBtn!: Phaser.GameObjects.Text
+
+  // Gamepad navigation
+  private gpCursor!: Phaser.GameObjects.Text
+  private activeItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
+  private focusIdx = 0
 
   // Background
   private stars: Phaser.GameObjects.TileSprite[] = []
@@ -43,11 +49,16 @@ export class LobbyScene extends Phaser.Scene {
 
     this.nm = new NetworkManager(WS_URL)
 
+    this.gpCursor = this.add.text(0, 0, '►', {
+      fontSize: '14px', fontFamily: FONT, color: YELLOW,
+    }).setOrigin(1, 0.5).setDepth(20).setVisible(false)
+
     this.buildMain()
     this.buildJoining()
     this.buildWaiting()
 
     this.showScreen('main')
+    this.setupGamepad()
     this.cameras.main.fadeIn(400, 0, 0, 0)
   }
 
@@ -55,6 +66,44 @@ export class LobbyScene extends Phaser.Scene {
 
   private showScreen(s: LobbyScreen) {
     for (const [key, grp] of this.groups) grp.setVisible(key === s)
+    const grp = this.groups.get(s)
+    const gpItems = grp?.getData('gpItems') as { text: Phaser.GameObjects.Text; action: () => void }[] | undefined
+    this.setActiveItems(gpItems ?? [])
+  }
+
+  private setupGamepad() {
+    this.input.gamepad?.on(
+      Phaser.Input.Gamepad.Events.BUTTON_DOWN,
+      (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
+        if (button.index === 12) this.moveFocus(-1)
+        if (button.index === 13) this.moveFocus(1)
+        if (button.index === 0 || button.index === 9) this.activateFocus()
+      },
+    )
+  }
+
+  private moveFocus(dir: number) {
+    const len = this.activeItems.length
+    if (!len) return
+    this.focusIdx = (this.focusIdx + dir + len) % len
+    this.placeCursor()
+  }
+
+  private activateFocus() {
+    this.activeItems[this.focusIdx]?.action()
+  }
+
+  private placeCursor() {
+    const item = this.activeItems[this.focusIdx]
+    if (!item) return
+    const b = item.text.getBounds()
+    this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true)
+  }
+
+  private setActiveItems(items: { text: Phaser.GameObjects.Text; action: () => void }[]) {
+    this.activeItems = items
+    this.focusIdx = 0
+    this.gpCursor.setVisible(false)
   }
 
   // ── main ─────────────────────────────────────────────────────────────────────
@@ -105,7 +154,13 @@ export class LobbyScene extends Phaser.Scene {
     })
 
     items.push(btnCreate, btnJoin, btnBack, errText)
-    this.groups.set('main', this.add.container(0, 0, items))
+    const mainContainer = this.add.container(0, 0, items)
+    mainContainer.setData('gpItems', [
+      { text: btnCreate, action: () => btnCreate.emit('pointerdown') },
+      { text: btnJoin,   action: () => btnJoin.emit('pointerdown')   },
+      { text: btnBack,   action: () => btnBack.emit('pointerdown')   },
+    ])
+    this.groups.set('main', mainContainer)
   }
 
   // ── joining ───────────────────────────────────────────────────────────────────
@@ -145,6 +200,11 @@ export class LobbyScene extends Phaser.Scene {
 
     items.push(btnJoin, btnBack)
 
+    const joiningGpItems = [
+      { text: btnJoin, action: () => btnJoin.emit('pointerdown') },
+      { text: btnBack, action: () => btnBack.emit('pointerdown') },
+    ]
+
     // Keyboard capture for typing the room code
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       if (!this.groups.get('joining')?.visible) return
@@ -161,7 +221,9 @@ export class LobbyScene extends Phaser.Scene {
       this.codeDisplay.setText(shown)
     })
 
-    this.groups.set('joining', this.add.container(0, 0, items))
+    const joiningContainer = this.add.container(0, 0, items)
+    joiningContainer.setData('gpItems', joiningGpItems)
+    this.groups.set('joining', joiningContainer)
   }
 
   private async submitJoinCode(btn: Phaser.GameObjects.Text) {
@@ -249,14 +311,18 @@ export class LobbyScene extends Phaser.Scene {
     this.startBtn.on('pointerdown', () => this.nm.startGame())
     items.push(this.startBtn)
 
-    const btnLeave = this.menuBtn(width / 2, height * 0.93, '< LEAVE')
-    btnLeave.on('pointerdown', () => {
+    this.leaveBtn = this.menuBtn(width / 2, height * 0.93, '< LEAVE')
+    this.leaveBtn.on('pointerdown', () => {
       this.nm.disconnect()
       this.showScreen('main')
     })
-    items.push(btnLeave)
+    items.push(this.leaveBtn)
 
-    this.groups.set('waiting', this.add.container(0, 0, items))
+    const waitingContainer = this.add.container(0, 0, items)
+    waitingContainer.setData('gpItems', [
+      { text: this.leaveBtn, action: () => this.leaveBtn.emit('pointerdown') },
+    ])
+    this.groups.set('waiting', waitingContainer)
   }
 
   // ── network callbacks ────────────────────────────────────────────────────────
@@ -323,8 +389,9 @@ export class LobbyScene extends Phaser.Scene {
       this.slotTexts[i].setAlpha(filled ? 1 : 0.3)
     }
 
+    const startEnabled = this.nm.isHost && count >= 2
     if (this.nm.isHost) {
-      if (count >= 2) {
+      if (startEnabled) {
         this.startBtn.setAlpha(1).setInteractive({ useHandCursor: true })
         this.waitStatus.setText('Host: press START when ready!')
       } else {
@@ -334,6 +401,12 @@ export class LobbyScene extends Phaser.Scene {
     } else {
       this.waitStatus.setText(`${count}/4 players — waiting for host to start…`)
     }
+
+    const gpItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
+    if (startEnabled) gpItems.push({ text: this.startBtn, action: () => this.startBtn.emit('pointerdown') })
+    gpItems.push({ text: this.leaveBtn, action: () => this.leaveBtn.emit('pointerdown') })
+    this.groups.get('waiting')?.setData('gpItems', gpItems)
+    if (this.groups.get('waiting')?.visible) this.setActiveItems(gpItems)
   }
 
   // ── shared helpers ────────────────────────────────────────────────────────────

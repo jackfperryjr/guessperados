@@ -59,6 +59,7 @@ export class BootScene extends Phaser.Scene {
             this.load.spritesheet(key, `assets/${file}`, { frameWidth: fw, frameHeight: fh });
         }
         this.load.image('logo', 'assets/guessperados.jpg');
+        this.load.image('icon-512', 'icons/icon-512.png');
     }
     create() {
         this.genCharacters();

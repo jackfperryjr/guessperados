@@ -10,6 +10,7 @@ import { generateRun } from '../levels';
 import { AbilityType, DamageType } from '../types';
 import { ABILITY_COLORS } from '../ui/UIManager';
 import { ABILITY_AMMO } from '../game/Player';
+import { SoundManager } from '../audio/SoundManager';
 const FONT = '"Press Start 2P", monospace';
 const INHALE_PULL_SPEED = 400;
 const SCORE_ENEMY = 200;
@@ -134,6 +135,8 @@ export class GameScene extends Phaser.Scene {
         this.buildPauseMenu();
         this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
         this.cameras.main.fadeIn(400, 0, 0, 0);
+        SoundManager.startBgMusic();
+        this.events.once('shutdown', () => SoundManager.stopBgMusic());
     }
     // ── background ──────────────────────────────────────────────────────────────
     doorGlow(x, y, w, h) {
@@ -508,7 +511,8 @@ export class GameScene extends Phaser.Scene {
                 : item.type === 'life' ? 'item-life'
                     : item.type === 'mystery' ? 'item-mystery'
                         : 'item-orb';
-            const img = this.add.image(item.x, item.y, tex).setDepth(8).setScale(1.2);
+            const img = this.add.image(item.x, item.y, tex).setDepth(8)
+                .setScale(item.type === 'mystery' ? 2.2 : 1.2);
             img.setData('item', item);
             if (item.type === 'ability') {
                 img.setTint(ABILITY_COLORS[item.ability ?? AbilityType.None]);
@@ -528,11 +532,13 @@ export class GameScene extends Phaser.Scene {
         if (item.type === 'heart') {
             player.hearts = Math.min(5, player.hearts + 1);
             this.showPopup(item.x, item.y, '+HEART', '#ff4d6a');
+            SoundManager.collectHeart();
         }
         else if (item.type === 'life') {
             const lives = (this.registry.get('lives') ?? 1) + 1;
             this.registry.set('lives', lives);
             this.showPopup(item.x, item.y, '1-UP!', '#ffe066');
+            SoundManager.collectLife();
         }
         else if (item.type === 'ability') {
             const ab = item.ability ?? AbilityType.None;
@@ -540,9 +546,11 @@ export class GameScene extends Phaser.Scene {
             player.abilityAmmo = ABILITY_AMMO[ab];
             player.emit('abilityChanged', ab);
             this.showPopup(item.x, item.y, AbilityType[ab].toUpperCase() + '!', '#aaffaa');
+            SoundManager.collectAbility();
         }
         else if (item.type === 'mystery') {
             this.triggerMysteryEffect(player);
+            SoundManager.collectMystery();
         }
         this.addScore(500);
     }
@@ -721,6 +729,7 @@ export class GameScene extends Phaser.Scene {
             this.boss = new Boss(this, this.cfg.bossSpawnX, 620, this.cfg.bossHp, 3000);
             this.boss.on('bossDead', () => {
                 this.bossDefeated = true;
+                SoundManager.bossDeath();
                 this.cameras.main.shake(300, 0.010);
                 this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066');
                 this.addScore(2000);
@@ -809,6 +818,14 @@ export class GameScene extends Phaser.Scene {
                 }
             });
         }
+        const persistedHearts = this.registry.get('persistedHearts');
+        if (persistedHearts) {
+            this.players.forEach((p, i) => {
+                if (typeof persistedHearts[i] === 'number') {
+                    p.hearts = persistedHearts[i];
+                }
+            });
+        }
     }
     handleRapierSwing(player) {
         const dir = player.flipX ? -1 : 1;
@@ -828,6 +845,7 @@ export class GameScene extends Phaser.Scene {
             dir * (this.boss.x - player.x) > 0 &&
             Math.abs(this.boss.x - player.x) < range + 20 &&
             Math.abs(this.boss.y - player.y) < 60) {
+            SoundManager.bossHit();
             this.boss.hit();
         }
     }
@@ -888,6 +906,7 @@ export class GameScene extends Phaser.Scene {
                     const player = _p;
                     const boss = _b;
                     if (player.inhaling && !player.hasInhaled) {
+                        SoundManager.bossHit();
                         boss.hit();
                     }
                     else {
@@ -961,12 +980,17 @@ export class GameScene extends Phaser.Scene {
             }
         });
         if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
+            SoundManager.bossHit();
             this.boss.hit();
             // Two follow-up hits spaced past the boss's invincibility window
-            this.time.delayedCall(700, () => { if (this.boss?.active)
-                this.boss.hit(); });
-            this.time.delayedCall(1400, () => { if (this.boss?.active)
-                this.boss.hit(); });
+            this.time.delayedCall(700, () => { if (this.boss?.active) {
+                SoundManager.bossHit();
+                this.boss.hit();
+            } });
+            this.time.delayedCall(1400, () => { if (this.boss?.active) {
+                SoundManager.bossHit();
+                this.boss.hit();
+            } });
         }
         this.destructibles.forEach(d => {
             if (dir * (d.x - src.x) > 0 && Math.abs(d.y - src.y) < 80) {
@@ -1109,6 +1133,7 @@ export class GameScene extends Phaser.Scene {
     }
     gameOver() {
         this.registry.set('persistedAbilities', null);
+        this.registry.set('persistedHearts', null);
         this.registry.set('runRooms', null);
         this.registry.set('runIndex', 0);
         this.registry.set('entryDir', null);
@@ -1130,6 +1155,7 @@ export class GameScene extends Phaser.Scene {
         this.physics.world.isPaused = true;
         this.registry.set('score', this.score);
         this.registry.set('persistedAbilities', this.players.map(p => ({ ability: p.currentAbility, ammo: p.abilityAmmo })));
+        this.registry.set('persistedHearts', this.players.map(p => p.hearts));
         const runRooms = this.registry.get('runRooms') ?? [];
         const runIndex = this.registry.get('runIndex') ?? 0;
         const goBack = (dir === 'left' || dir === 'bottom') && runIndex > 0;

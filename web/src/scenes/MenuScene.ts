@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { SoundManager } from '../audio/SoundManager'
 
 type Screen = 'main' | 'controls'
 
@@ -39,6 +40,9 @@ export class MenuScene extends Phaser.Scene {
     this.showScreen('main')
     this.setupGamepad()
     this.setupControllerStatus()
+
+    // Play intro fanfare on the very first user gesture (menu is the first interactive screen)
+    SoundManager.whenUnlocked(() => SoundManager.playIntroTheme())
   }
 
   private setupControllerStatus() {
@@ -207,6 +211,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private startGame(playerCount: number) {
+    SoundManager.unlock()
     this.registry.set('playerCount',   playerCount)
     this.registry.set('currentLevel',  1)
     this.registry.set('currentRoom',   1)

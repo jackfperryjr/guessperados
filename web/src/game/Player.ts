@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { AbilityType, DamageType } from '../types'
 import { BootScene } from '../scenes/BootScene'
+import { SoundManager } from '../audio/SoundManager'
 
 const MOVE_SPEED        = 220
 const JUMP_VELOCITY     = -520
@@ -257,6 +258,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   hitByEnemy() {
     if (this.invincible || !this.isAlive) return
+    SoundManager.playerHit()
     this.hearts--
     this.emit('heartLost', this.hearts)
 
@@ -289,6 +291,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   die() {
     if (this.inhaledObject) this.spitObject()
+    SoundManager.playerDeath()
     this.isAlive = false
     this.setAlpha(0.3)
     this.setTint(0x888888)

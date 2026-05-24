@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AbilityType } from '../types';
+import { SoundManager } from '../audio/SoundManager';
 const WALK_SPEED = 80;
 const ATTACK_INTERVAL = {
     [AbilityType.None]: 0, // pinklady boss — handled separately
@@ -104,7 +105,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.body.setVelocity(0, 0);
     }
     die() {
-        ;
+        SoundManager.enemyDeath();
         this.body.setEnable(false);
         this.scene.tweens.add({
             targets: this,

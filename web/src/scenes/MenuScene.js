@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SoundManager } from '../audio/SoundManager';
 const FONT = '"Press Start 2P", monospace';
 const CLR_TITLE = '#ffe066';
 const CLR_SELECT = '#ffffff';
@@ -8,6 +9,7 @@ export class MenuScene extends Phaser.Scene {
     mainGroup;
     controlsGroup;
     gpCursor;
+    padStatus;
     activeItems = [];
     focusIdx = 0;
     constructor() { super({ key: 'MenuScene' }); }
@@ -17,10 +19,36 @@ export class MenuScene extends Phaser.Scene {
         this.gpCursor = this.add.text(0, 0, '►', {
             fontSize: '14px', fontFamily: FONT, color: CLR_TITLE,
         }).setOrigin(1, 0.5).setDepth(20).setVisible(false);
+        this.padStatus = this.add.text(width / 2, height - 10, '', {
+            fontSize: '8px', fontFamily: FONT, color: '#44cc88',
+        }).setOrigin(0.5, 1).setDepth(20);
         this.buildMain();
         this.buildControls();
         this.showScreen('main');
         this.setupGamepad();
+        this.setupControllerStatus();
+        // Play intro fanfare on the very first user gesture (menu is the first interactive screen)
+        SoundManager.whenUnlocked(() => SoundManager.playIntroTheme());
+    }
+    setupControllerStatus() {
+        const refresh = () => {
+            const pads = this.input.gamepad?.gamepads ?? [];
+            const connected = pads.some(p => p != null);
+            if (connected) {
+                this.padStatus.setText('● CONTROLLER CONNECTED').setColor('#44cc88');
+            }
+            else if ('ontouchstart' in window) {
+                this.padStatus.setText('● PRESS ANY BUTTON ON YOUR CONTROLLER TO CONNECT').setColor('#ffe066');
+            }
+            else {
+                this.padStatus.setText('');
+            }
+        };
+        refresh();
+        this.input.gamepad?.on(Phaser.Input.Gamepad.Events.CONNECTED, refresh);
+        this.input.gamepad?.on(Phaser.Input.Gamepad.Events.DISCONNECTED, refresh);
+        // Re-check every 2 s in case the event fired before this scene was ready
+        this.time.addEvent({ delay: 2000, loop: true, callback: refresh });
     }
     setupGamepad() {
         this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, (_pad, button) => {
@@ -142,6 +170,7 @@ export class MenuScene extends Phaser.Scene {
         return btn;
     }
     startGame(playerCount) {
+        SoundManager.unlock();
         this.registry.set('playerCount', playerCount);
         this.registry.set('currentLevel', 1);
         this.registry.set('currentRoom', 1);

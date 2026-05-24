@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SoundManager } from '../audio/SoundManager';
 const FONT = '"Press Start 2P", monospace';
 export class VictoryScene extends Phaser.Scene {
     gpCursor;
@@ -15,6 +16,8 @@ export class VictoryScene extends Phaser.Scene {
         }).setOrigin(1, 0.5).setDepth(20).setVisible(false);
         this.spawnStars(width, height);
         this.buildUI(cx, cy);
+        SoundManager.startVictoryMusic();
+        this.events.once('shutdown', () => SoundManager.stopVictoryMusic());
         this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, (_pad, button) => {
             if (button.index === 12)
                 this.moveFocus(-1);
@@ -72,6 +75,7 @@ export class VictoryScene extends Phaser.Scene {
                 this.registry.set('runIndex', 0);
                 this.registry.set('entryDir', null);
                 this.registry.set('persistedAbilities', null);
+                this.registry.set('persistedHearts', null);
                 this.registry.set('score', 0);
                 this.scene.start('MenuScene');
             });
@@ -83,6 +87,7 @@ export class VictoryScene extends Phaser.Scene {
                 this.registry.set('runIndex', 0);
                 this.registry.set('entryDir', null);
                 this.registry.set('persistedAbilities', null);
+                this.registry.set('persistedHearts', null);
                 this.registry.set('score', 0);
                 this.scene.start('MenuScene');
             });
