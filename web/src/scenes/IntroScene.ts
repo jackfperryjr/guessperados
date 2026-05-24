@@ -55,7 +55,7 @@ export class IntroScene extends Phaser.Scene {
       this.scheduleSlide(slide, t)
       t += SLIDE_MS
     }
-    this.time.delayedCall(t + 100, () => { if (!this.skipped) this.showTitleCard() })
+    this.time.delayedCall(t + 100, () => { if (!this.skipped) this.toMenu() })
   }
 
   private scheduleSlide(slide: Slide, startAt: number) {
@@ -98,45 +98,4 @@ export class IntroScene extends Phaser.Scene {
     })
   }
 
-  private showTitleCard() {
-    const { width, height } = this.scale
-    const cx = width / 2, cy = height / 2
-
-    // Soft starfield
-    for (let i = 0; i < 60; i++) {
-      const s = this.add.rectangle(
-        Phaser.Math.Between(0, width), Phaser.Math.Between(0, height),
-        Phaser.Math.Between(1, 3), Phaser.Math.Between(1, 3),
-        0xffffff, 0.15 + Math.random() * 0.4,
-      )
-      this.tweens.add({
-        targets: s, alpha: { from: 0.05, to: 0.7 },
-        duration: 900 + Math.random() * 1200, yoyo: true, repeat: -1,
-        delay: Math.random() * 1500,
-      })
-    }
-
-    const logo = this.add.image(cx, cy - 40, 'logo')
-      .setDisplaySize(Math.min(width * 0.72, 720), 230)
-      .setAlpha(0)
-
-    const prompt = this.add.text(cx, cy + 130, 'PRESS ANY BUTTON TO START', {
-      fontSize: '11px', fontFamily: FONT, color: '#aaccdd',
-    }).setOrigin(0.5).setAlpha(0)
-
-    this.tweens.add({
-      targets: [logo, prompt], alpha: 1, duration: 900,
-      onComplete: () => {
-        this.tweens.add({
-          targets: prompt, alpha: { from: 0.3, to: 1 },
-          duration: 700, yoyo: true, repeat: -1,
-        })
-
-        // Re-register skip handlers so the title card responds too
-        this.input.once('pointerdown',  () => this.skip())
-        this.input.keyboard?.once('keydown', () => this.skip())
-        this.input.gamepad?.once(Phaser.Input.Gamepad.Events.BUTTON_DOWN, () => this.skip())
-      },
-    })
-  }
 }

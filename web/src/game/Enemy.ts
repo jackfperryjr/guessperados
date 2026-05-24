@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { AbilityType } from '../types'
+import { SoundManager } from '../audio/SoundManager'
 
 const WALK_SPEED = 80
 
@@ -116,6 +117,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   die() {
+    SoundManager.enemyDeath()
     ;(this.body as Phaser.Physics.Arcade.Body).setEnable(false)
     this.scene.tweens.add({
       targets: this,

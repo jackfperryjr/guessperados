@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { SoundManager } from './audio/SoundManager'
 import { BootScene } from './scenes/BootScene'
 import { IntroScene } from './scenes/IntroScene'
 import { MenuScene } from './scenes/MenuScene'
@@ -27,10 +28,17 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [BootScene, IntroScene, MenuScene, GameScene, VictoryScene, LevelCompleteScene, LobbyScene],
 }
 
-// iOS/Safari gates the Gamepad API behind a user gesture. Calling
-// getGamepads() from inside a touch handler unlocks it for the session.
-document.addEventListener('touchstart', () => {
+// iOS/Safari requires a user gesture before the Gamepad API and AudioContext
+// are accessible. Unlock both on the first interaction of any kind.
+let _audioUnlocked = false
+const unlockOnGesture = () => {
+  if (_audioUnlocked) return
+  _audioUnlocked = true
   try { navigator.getGamepads() } catch (_) { /* ignore */ }
-}, { once: true, passive: true })
+  SoundManager.unlock()
+}
+document.addEventListener('touchstart', unlockOnGesture, { passive: true })
+document.addEventListener('pointerdown', unlockOnGesture, { passive: true })
+document.addEventListener('keydown',    unlockOnGesture)
 
 new Phaser.Game(config)
