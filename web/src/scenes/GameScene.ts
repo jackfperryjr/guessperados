@@ -60,6 +60,9 @@ export class GameScene extends Phaser.Scene {
   private roomTransitioning = false
   private bossDefeated = false
   private bossRoomLeftWall: Phaser.GameObjects.TileSprite | null = null
+  private pauseItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
+  private pauseFocusIdx = 0
+  private pauseCursor: Phaser.GameObjects.Text | null = null
 
   private collectibleSprites: Phaser.GameObjects.Image[] = []
   private inhaleGraphics: Phaser.GameObjects.Graphics[] = []
@@ -88,6 +91,9 @@ export class GameScene extends Phaser.Scene {
     this.roomTransitioning = false
     this.bossDefeated = false
     this.bossRoomLeftWall = null
+    this.pauseItems = []
+    this.pauseFocusIdx = 0
+    this.pauseCursor = null
   }
 
   create() {
@@ -755,6 +761,14 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.shake(300, 0.010)
         this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
         this.addScore(2000)
+        // Auto-transition to victory screen after celebration
+        this.time.delayedCall(3200, () => {
+          if (!this.roomTransitioning) {
+            this.roomTransitioning = true
+            this.cameras.main.fadeOut(900, 0, 0, 0)
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
+          }
+        })
         // Unseal the left exit — fade out the wall and show the door frame
         if (this.bossRoomLeftWall) {
           const wall = this.bossRoomLeftWall
@@ -994,17 +1008,21 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: [bolt, glow], alpha: 0, scaleY: 2, duration: 280,
       onComplete: () => { bolt.destroy(); glow.destroy() } })
 
+    // 3× wider arc and heavier damage vs fire/ice
     this.enemies.forEach(e => {
-      if (dir * (e.x - src.x) > 0 && Math.abs(e.y - src.y) < 44) {
+      if (dir * (e.x - src.x) > 0 && Math.abs(e.y - src.y) < 80) {
         e.die(); this.addScore(SCORE_ENEMY)
       }
     })
-    if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 60) {
+    if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
       this.boss.hit()
+      // Two follow-up hits spaced past the boss's invincibility window
+      this.time.delayedCall(700,  () => { if (this.boss?.active) this.boss!.hit() })
+      this.time.delayedCall(1400, () => { if (this.boss?.active) this.boss!.hit() })
     }
     this.destructibles.forEach(d => {
-      if (dir * (d.x - src.x) > 0 && Math.abs(d.y - src.y) < 44) {
-        d.takeDamage(60, DamageType.Electric)
+      if (dir * (d.x - src.x) > 0 && Math.abs(d.y - src.y) < 80) {
+        d.takeDamage(150, DamageType.Electric)   // 3× fire's 50
       }
     })
   }
@@ -1245,6 +1263,13 @@ export class GameScene extends Phaser.Scene {
         // Start button (9) always toggles pause regardless of player state
         if (button.index === 9) { this.togglePause(); return }
 
+        // D-pad navigates pause menu when paused
+        if (!this.gm.isPlaying()) {
+          if (button.index === 12) { this.movePauseFocus(-1); return }
+          if (button.index === 13) { this.movePauseFocus(1);  return }
+          if (button.index === 0)  { this.pauseItems[this.pauseFocusIdx]?.action(); return }
+        }
+
         const player = this.players.find((_, i) => this.input.gamepad?.getPad(i) === pad)
         if (!player || !player.isAlive || player.isInhaled) return
         if (button.index === 1) player.useAbility()
@@ -1273,18 +1298,30 @@ export class GameScene extends Phaser.Scene {
 
     const resume  = this.pauseBtn(width / 2, height * 0.50, '▶  RESUME')
     const toMenu  = this.pauseBtn(width / 2, height * 0.63, '⌂  MAIN MENU')
-    const escHint = this.add.text(width / 2, height * 0.77, 'ESC to toggle', {
+    const escHint = this.add.text(width / 2, height * 0.77, 'ESC / Start to toggle', {
       fontSize: '9px', fontFamily: FONT, color: '#556677',
     }).setOrigin(0.5).setScrollFactor(0)
 
-    resume.on('pointerdown', () => this.togglePause())
-    toMenu.on('pointerdown', () => {
+    const resumeAction = () => this.togglePause()
+    const menuAction   = () => {
       this.cameras.main.fadeOut(300, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'))
-    })
+    }
+    resume.on('pointerdown', resumeAction)
+    toMenu.on('pointerdown', menuAction)
 
     this.pauseContainer = this.add.container(0, 0, [overlay, title, resume, toMenu, escHint])
       .setDepth(100).setVisible(false)
+
+    this.pauseItems = [
+      { text: resume, action: resumeAction },
+      { text: toMenu, action: menuAction   },
+    ]
+
+    // Cursor lives outside the container so it can move freely
+    this.pauseCursor = this.add.text(0, 0, '►', {
+      fontSize: '16px', fontFamily: FONT, color: '#ffe066',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(200).setVisible(false)
   }
 
   private pauseBtn(x: number, y: number, label: string): Phaser.GameObjects.Text {
@@ -1304,6 +1341,16 @@ export class GameScene extends Phaser.Scene {
     else this.gm.resume()
     this.pauseContainer.setVisible(nowPaused)
     this.physics.world.isPaused = nowPaused
+    // Reset cursor when closing pause
+    if (!nowPaused && this.pauseCursor) this.pauseCursor.setVisible(false)
+  }
+
+  private movePauseFocus(dir: number) {
+    const len = this.pauseItems.length
+    if (!len || !this.pauseCursor) return
+    this.pauseFocusIdx = (this.pauseFocusIdx + dir + len) % len
+    const b = this.pauseItems[this.pauseFocusIdx].text.getBounds()
+    this.pauseCursor.setPosition(b.left - 12, b.centerY).setVisible(true)
   }
 
   // ── inhale cone ───────────────────────────────────────────────────────────

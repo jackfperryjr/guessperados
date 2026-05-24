@@ -5,8 +5,8 @@ const HOLD_MS = 1400;
 const SLIDE_MS = FADE_MS + HOLD_MS + FADE_MS + 200; // total time per slide
 const SLIDES = [
     { label: 'PRODUCED BY', name: 'JACK', nameColor: '#ffe066' },
-    { label: 'DEVELOPED BY', name: 'CLAUDE', nameColor: '#80d8ff', sub: '( AN ANTHROPIC AI )' },
     { label: 'INSPIRED BY', name: 'HIS KIDS', nameColor: '#ff80ab' },
+    { label: 'DEVELOPED BY', name: 'CLAUDE', nameColor: '#80d8ff', sub: '( AN ANTHROPIC AI )' },
 ];
 export class IntroScene extends Phaser.Scene {
     skipped = false;
