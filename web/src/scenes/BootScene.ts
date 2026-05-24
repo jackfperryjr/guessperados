@@ -463,6 +463,30 @@ export class BootScene extends Phaser.Scene {
     this.genPlanet('planet-earth',  48,  0x1a5276, 0x27ae60, 0x85c1e9)
     this.genPlanet('planet-purple', 36,  0x4a148c, 0x7b1fa2, 0xce93d8)
     this.genPlanet('planet-red',    56,  0x7f0000, 0xb71c1c, 0xff5722)
+
+    // Pixel rapier (32×8) — origin used at (0.15, 0.5) so grip is pivot
+    const rp = this.g()
+    // Pommel
+    rp.fillStyle(0x999999); rp.fillRect(0, 2, 3, 4)
+    rp.fillStyle(0xcccccc); rp.fillRect(0, 2, 3, 2)
+    // Grip (leather)
+    rp.fillStyle(0x6d3b0e); rp.fillRect(3, 2, 6, 4)
+    rp.fillStyle(0x8b5e2c); rp.fillRect(3, 2, 6, 1)
+    rp.fillStyle(0x3d1f00); rp.fillRect(3, 5, 6, 1)
+    // Guard (gold crosspiece, full height)
+    rp.fillStyle(0xcb9b00); rp.fillRect(9, 0, 3, 8)
+    rp.fillStyle(0xffe57f); rp.fillRect(9, 0, 3, 2)
+    rp.fillStyle(0x8a6200); rp.fillRect(9, 6, 3, 2)
+    // Blade
+    rp.fillStyle(0xbdbdbd); rp.fillRect(12, 2, 28, 4)
+    rp.fillStyle(0xeeeeee); rp.fillRect(12, 2, 28, 1)   // top sharp edge
+    rp.fillStyle(0x888888); rp.fillRect(12, 5, 28, 1)   // bottom shadow
+    // Tip (tapered point)
+    rp.fillStyle(0xbdbdbd); rp.fillRect(40, 2, 2, 4)
+    rp.fillStyle(0xbdbdbd); rp.fillRect(42, 3, 1, 2)
+    // Blade sheen
+    rp.fillStyle(0xffffff, 0.55); rp.fillRect(14, 2, 12, 1)
+    rp.generateTexture('rapier', 43, 8); rp.destroy()
   }
 
   // ── scenery props ─────────────────────────────────────────────────────────────
@@ -698,19 +722,53 @@ export class BootScene extends Phaser.Scene {
   }
 
   private genCollectibles() {
-    // Heart — extra health
+    // Heart — Zelda-style pixel heart
     const ht = this.g()
-    // Classic pixel heart shape
     ht.fillStyle(0xff1744)
-    ht.fillRect(4, 4, 6, 6); ht.fillRect(14, 4, 6, 6)           // top bumps
-    ht.fillRect(2, 8, 20, 6)                                     // wide mid
-    ht.fillRect(4, 14, 16, 4)                                    // lower
-    ht.fillRect(6, 18, 12, 4)
-    ht.fillRect(8, 22, 8, 3)
-    ht.fillRect(10, 24, 4, 2)
-    ht.fillStyle(0xff6e87); ht.fillRect(7, 6, 3, 3)              // sheen
-    ht.fillStyle(0xff6e87); ht.fillRect(17, 6, 3, 3)
+    ht.fillRect(1, 2, 8, 1);  ht.fillRect(15, 2, 8, 1)
+    ht.fillRect(1, 3, 9, 1);  ht.fillRect(14, 3, 9, 1)
+    ht.fillRect(0, 4, 11, 1); ht.fillRect(13, 4, 11, 1)
+    ht.fillRect(0, 5, 24, 8)
+    ht.fillRect(1, 13, 22, 2)
+    ht.fillRect(3, 15, 18, 2)
+    ht.fillRect(5, 17, 14, 2)
+    ht.fillRect(7, 19, 10, 2)
+    ht.fillRect(9, 21, 6, 2)
+    ht.fillRect(11, 23, 2, 2)
+    ht.fillStyle(0xff8fa3); ht.fillRect(3, 3, 4, 4)
+    ht.fillStyle(0xff8fa3); ht.fillRect(17, 3, 4, 4)
     ht.generateTexture('item-heart', 24, 28); ht.destroy()
+
+    // Ability icons (16×16)
+    const ifire = this.g()
+    ifire.fillStyle(0xff6600)
+    ifire.fillRect(7, 0, 2, 2); ifire.fillRect(5, 2, 6, 3); ifire.fillRect(4, 5, 8, 5); ifire.fillRect(3, 10, 10, 4)
+    ifire.fillStyle(0xff0000); ifire.fillRect(6, 4, 4, 6)
+    ifire.fillStyle(0xffdd00); ifire.fillRect(7, 7, 2, 5)
+    ifire.generateTexture('icon-fire', 16, 16); ifire.destroy()
+
+    const ibomb = this.g()
+    ibomb.fillStyle(0x333333)
+    ibomb.fillRect(3, 5, 10, 7); ibomb.fillRect(4, 4, 8, 1); ibomb.fillRect(4, 12, 8, 1)
+    ibomb.fillRect(2, 6, 2, 5); ibomb.fillRect(12, 6, 2, 5)
+    ibomb.fillStyle(0x8b5e2c); ibomb.fillRect(8, 2, 2, 3); ibomb.fillRect(10, 1, 2, 2)
+    ibomb.fillStyle(0xffdd00); ibomb.fillRect(11, 0, 2, 2)
+    ibomb.fillStyle(0x666666); ibomb.fillRect(5, 7, 3, 3)
+    ibomb.generateTexture('icon-bomb', 16, 16); ibomb.destroy()
+
+    const ielec = this.g()
+    ielec.fillStyle(0xffdd00)
+    ielec.fillRect(9, 1, 4, 6); ielec.fillRect(5, 7, 6, 2); ielec.fillRect(3, 9, 4, 6)
+    ielec.fillStyle(0xffffff); ielec.fillRect(10, 2, 2, 3)
+    ielec.generateTexture('icon-electric', 16, 16); ielec.destroy()
+
+    const iice = this.g()
+    iice.fillStyle(0x88ddff)
+    iice.fillRect(7, 0, 2, 16); iice.fillRect(0, 7, 16, 2)
+    iice.fillRect(3, 3, 2, 2); iice.fillRect(11, 3, 2, 2)
+    iice.fillRect(3, 11, 2, 2); iice.fillRect(11, 11, 2, 2)
+    iice.fillStyle(0xffffff); iice.fillRect(7, 0, 2, 3)
+    iice.generateTexture('icon-ice', 16, 16); iice.destroy()
 
     // Star — extra life
     const ls = this.g()
@@ -730,6 +788,28 @@ export class BootScene extends Phaser.Scene {
     ob.lineStyle(2, 0xcccccc); ob.strokeCircle(12, 12, 11)
     ob.fillStyle(0xffffff, 0.9); ob.fillRect(7, 6, 4, 3)        // specular
     ob.generateTexture('item-orb', 24, 24); ob.destroy()
+
+    // Mystery "?" item — purple diamond with question mark
+    const mq = this.g()
+    // Diamond shape
+    mq.fillStyle(0x6a0080)
+    mq.fillTriangle(14, 0,  28, 14, 14, 28)
+    mq.fillTriangle(14, 0,  0,  14, 14, 28)
+    mq.fillStyle(0xce93d8)
+    mq.fillTriangle(14, 3,  25, 14, 14, 25)
+    mq.fillTriangle(14, 3,  3,  14, 14, 25)
+    mq.fillStyle(0x9c27b0, 0.7)
+    mq.fillTriangle(14, 3,  14, 14, 8,  14)
+    // "?" mark
+    mq.fillStyle(0xffffff)
+    mq.fillRect(11, 7, 6, 2)   // top arc of ?
+    mq.fillRect(15, 9, 2, 4)   // right side
+    mq.fillRect(11, 11, 4, 2)  // curve to center
+    mq.fillRect(11, 17, 3, 3)  // dot
+    // bright edge sheen
+    mq.lineStyle(1, 0xf3e5f5, 0.8)
+    mq.lineBetween(14, 0, 28, 14)
+    mq.generateTexture('item-mystery', 28, 28); mq.destroy()
   }
 
   private genPlanet(key: string, r: number, base: number, land: number, atmo: number) {

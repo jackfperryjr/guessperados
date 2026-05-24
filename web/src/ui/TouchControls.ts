@@ -15,7 +15,7 @@ export class TouchControls {
   private jumpHeld     = false
   private inhaleHeld   = false
   private abilityJust  = false
-  private meetingJust  = false
+  private rapierJust   = false
 
   constructor(private scene: Phaser.Scene) {
     this.base = scene.add.circle(0, 0, STICK_RADIUS, 0xffffff, 0.12)
@@ -35,7 +35,7 @@ export class TouchControls {
     this.btn(bx,       by,       '▲', 0x4fc3f7, () => { this.jumpHeld = true },   () => { this.jumpHeld = false })
     this.btn(bx - 70,  by,       'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
     this.btn(bx,       by - 70,  'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 70,  by - 70,  '!',  0xff8a65, () => { this.meetingJust = true })
+    this.btn(bx - 70,  by - 70,  '⚔', 0xff8a65, () => { this.rapierJust = true })
   }
 
   private btn(
@@ -86,7 +86,7 @@ export class TouchControls {
     })
   }
 
-  apply(player: Player, onMenu: () => void) {
+  apply(player: Player) {
     if (!player.isAlive || player.isInhaled) return
 
     if (this.axisX < -DEAD_ZONE) player.moveLeft()
@@ -97,8 +97,8 @@ export class TouchControls {
     else player.jumpReleased()
 
     player.setInhaling(this.inhaleHeld)
-    if (this.abilityJust) { player.useAbility();   this.abilityJust = false }
-    if (this.meetingJust) { onMenu();               this.meetingJust = false }
+    if (this.abilityJust) { player.useAbility(); this.abilityJust = false }
+    if (this.rapierJust)  { player.useRapier();  this.rapierJust  = false }
   }
 
   destroy() {

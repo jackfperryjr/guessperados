@@ -4,6 +4,7 @@ export interface RemoteInput {
   jump: boolean
   inhale: boolean
   ability: boolean
+  rapier: boolean
 }
 
 export class NetworkManager {
@@ -78,6 +79,7 @@ export class NetworkManager {
           jump:    msg.jump,
           inhale:  msg.inhale,
           ability: msg.ability,
+          rapier:  msg.rapier ?? false,
         })
         break
 

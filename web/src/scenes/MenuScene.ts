@@ -125,6 +125,7 @@ export class MenuScene extends Phaser.Scene {
   private startGame(playerCount: number) {
     this.registry.set('playerCount',   playerCount)
     this.registry.set('currentLevel',  1)
+    this.registry.set('currentRoom',   1)
     this.registry.set('lives',         3)
     this.registry.set('score',         0)
     this.cameras.main.fadeOut(400, 0, 0, 0)
