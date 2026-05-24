@@ -3,16 +3,14 @@ import { Player } from '../game/Player'
 import { AbilityType } from '../types'
 
 export const ABILITY_COLORS: Record<AbilityType, number> = {
-  [AbilityType.None]:     0x444444,
+  [AbilityType.None]:     0x222222,
   [AbilityType.Fire]:     0xff6600,
-  [AbilityType.Bomb]:     0x333333,
   [AbilityType.Electric]: 0xffdd00,
   [AbilityType.Ice]:      0x66ccff,
 }
 
 const ABILITY_ICON_KEYS: Partial<Record<AbilityType, string>> = {
   [AbilityType.Fire]:     'icon-fire',
-  [AbilityType.Bomb]:     'icon-bomb',
   [AbilityType.Electric]: 'icon-electric',
   [AbilityType.Ice]:      'icon-ice',
 }
@@ -45,16 +43,16 @@ export class UIManager {
     }
 
     if (isBossRoom && bossMaxHp > 0) {
-      const bx = width / 2
-      const by = 44
-      scene.add.text(bx, by - 14, 'BOSS', {
+      const bx = width - 110
+      const by = 22
+      scene.add.text(bx, by - 10, 'BOSS', {
         fontSize: '8px', fontFamily: FONT, color: '#ff4444',
       }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20)
 
-      scene.add.rectangle(bx, by, 202, 14, 0x330000)
+      scene.add.rectangle(bx, by, 152, 12, 0x330000)
         .setScrollFactor(0).setDepth(20)
 
-      this.bossBarFill = scene.add.rectangle(bx - 100, by, 200, 12, 0xff2200)
+      this.bossBarFill = scene.add.rectangle(bx - 75, by, 150, 10, 0xff2200)
         .setOrigin(0, 0.5)
         .setScrollFactor(0).setDepth(21)
     }
@@ -64,7 +62,7 @@ export class UIManager {
       const anchorRight = i !== 0
 
       const hearts: Phaser.GameObjects.Image[] = []
-      for (let h = 0; h < 3; h++) {
+      for (let h = 0; h < 5; h++) {
         const hx = anchorRight ? baseX - h * 22 - 8 : baseX + h * 22 + 8
         const icon = scene.add.image(hx, 46, 'item-heart')
           .setScale(0.48).setScrollFactor(0).setDepth(20)
@@ -72,11 +70,11 @@ export class UIManager {
       }
       this.heartIcons.push(hearts)
 
-      const abx = anchorRight ? baseX - 84 : baseX + 84
+      const abx = anchorRight ? baseX - 144 : baseX + 144
       this.abilityBoxXs.push(abx)
 
-      const box = scene.add.rectangle(abx, 46, 28, 28, 0x222222)
-        .setScrollFactor(0).setDepth(20)
+      const box = scene.add.rectangle(abx, 46, 30, 30, 0x000000)
+        .setScrollFactor(0).setDepth(20).setAlpha(0.35)
       const abilityIcon = scene.add.image(abx, 46, 'icon-fire')
         .setVisible(false)
         .setScrollFactor(0).setDepth(21)

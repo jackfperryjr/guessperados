@@ -6,7 +6,6 @@ export enum GameState {
 export enum AbilityType {
   None = 'None',
   Fire = 'Fire',
-  Bomb = 'Bomb',
   Electric = 'Electric',
   Ice = 'Ice',
 }

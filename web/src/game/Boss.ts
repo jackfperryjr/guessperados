@@ -82,7 +82,7 @@ export class Boss extends Enemy {
     this.specialTimer -= dt
     if (this.specialTimer <= 0) {
       this.specialTimer = 8000 + Math.random() * 4000
-      const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice, AbilityType.Bomb]
+      const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
       this.emit('bossAttack', abilities[Math.floor(Math.random() * abilities.length)])
     }
   }

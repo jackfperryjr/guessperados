@@ -12,13 +12,12 @@ const SPIT_VY = -320;
 export const ABILITY_AMMO = {
     [AbilityType.None]: 0,
     [AbilityType.Fire]: 10,
-    [AbilityType.Bomb]: 5,
-    [AbilityType.Electric]: 1,
+    [AbilityType.Electric]: 3,
     [AbilityType.Ice]: 10,
 };
 export class Player extends Phaser.Physics.Arcade.Sprite {
     playerId;
-    hearts = 3;
+    hearts = 5;
     currentAbility = AbilityType.None;
     abilityAmmo = 0;
     isAlive = true;
@@ -42,7 +41,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         scene.add.existing(this);
         scene.physics.add.existing(this);
         const body = this.body;
-        body.setCollideWorldBounds(true);
+        body.setCollideWorldBounds(false);
         body.setSize(26, 30);
         if (scene.textures.exists('rapier')) {
             this.rapierSprite = scene.add.image(x - 3, y + 13, 'rapier')

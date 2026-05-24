@@ -4,14 +4,12 @@ const WALK_SPEED = 80;
 const ATTACK_INTERVAL = {
     [AbilityType.None]: 0, // pinklady boss — handled separately
     [AbilityType.Fire]: 2800,
-    [AbilityType.Bomb]: 4200,
     [AbilityType.Electric]: 3400,
     [AbilityType.Ice]: 3000,
 };
 const ENEMY_SHEET = {
     [AbilityType.None]: 'sheet-enemy-pinklady',
     [AbilityType.Fire]: 'sheet-enemy-dragon',
-    [AbilityType.Bomb]: 'sheet-enemy-sqoomba',
     [AbilityType.Electric]: 'sheet-enemy-duckbot',
     [AbilityType.Ice]: 'sheet-enemy-troomba',
 };
@@ -19,7 +17,6 @@ const ENEMY_SHEET = {
 const ENEMY_BODY = {
     [AbilityType.None]: [26, 30],
     [AbilityType.Fire]: [30, 34],
-    [AbilityType.Bomb]: [30, 30],
     [AbilityType.Electric]: [26, 32],
     [AbilityType.Ice]: [28, 32],
 };

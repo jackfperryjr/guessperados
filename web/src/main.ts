@@ -1,7 +1,9 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
+import { IntroScene } from './scenes/IntroScene'
 import { MenuScene } from './scenes/MenuScene'
 import { GameScene } from './scenes/GameScene'
+import { VictoryScene } from './scenes/VictoryScene'
 import { LevelCompleteScene } from './scenes/LevelCompleteScene'
 import { LobbyScene } from './scenes/LobbyScene'
 
@@ -22,7 +24,7 @@ const config: Phaser.Types.Core.GameConfig = {
   input: {
     gamepad: true,
   },
-  scene: [BootScene, MenuScene, GameScene, LevelCompleteScene, LobbyScene],
+  scene: [BootScene, IntroScene, MenuScene, GameScene, VictoryScene, LevelCompleteScene, LobbyScene],
 }
 
 new Phaser.Game(config)

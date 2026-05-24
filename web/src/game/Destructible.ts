@@ -27,7 +27,6 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
     const tints: Record<AbilityType, number> = {
       [AbilityType.None]:     0x78909c,
       [AbilityType.Fire]:     0xff6600,
-      [AbilityType.Bomb]:     0x444444,
       [AbilityType.Electric]: 0xffdd00,
       [AbilityType.Ice]:      0x66ccff,
     }
@@ -42,8 +41,7 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
     this.scene.time.delayedCall(120, () => {
       const tints: Record<AbilityType, number> = {
         [AbilityType.None]: 0x78909c, [AbilityType.Fire]: 0xff6600,
-        [AbilityType.Bomb]: 0x444444, [AbilityType.Electric]: 0xffdd00,
-        [AbilityType.Ice]:  0x66ccff,
+        [AbilityType.Electric]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
       }
       if (this.active) this.setTint(tints[this.abilityDrop])
     })

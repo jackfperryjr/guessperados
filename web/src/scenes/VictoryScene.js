@@ -1,0 +1,146 @@
+import Phaser from 'phaser';
+const FONT = '"Press Start 2P", monospace';
+export class VictoryScene extends Phaser.Scene {
+    gpCursor;
+    menuItems = [];
+    focusIdx = 0;
+    constructor() { super({ key: 'VictoryScene' }); }
+    create() {
+        const { width, height } = this.scale;
+        const cx = width / 2, cy = height / 2;
+        this.cameras.main.setBackgroundColor('#010118');
+        this.cameras.main.fadeIn(700, 0, 0, 0);
+        this.gpCursor = this.add.text(0, 0, '►', {
+            fontSize: '14px', fontFamily: FONT, color: '#ffe066',
+        }).setOrigin(1, 0.5).setDepth(20).setVisible(false);
+        this.spawnStars(width, height);
+        this.buildUI(cx, cy);
+        this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, (_pad, button) => {
+            if (button.index === 12)
+                this.moveFocus(-1);
+            if (button.index === 13)
+                this.moveFocus(1);
+            if (button.index === 0 || button.index === 9)
+                this.menuItems[this.focusIdx]?.action();
+        });
+    }
+    moveFocus(dir) {
+        const len = this.menuItems.length;
+        if (!len)
+            return;
+        this.focusIdx = (this.focusIdx + dir + len) % len;
+        const b = this.menuItems[this.focusIdx].text.getBounds();
+        this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true);
+    }
+    spawnStars(width, height) {
+        for (let i = 0; i < 90; i++) {
+            const x = Phaser.Math.Between(0, width);
+            const y = Phaser.Math.Between(0, height);
+            const sz = Math.random() < 0.25 ? 3 : Math.random() < 0.5 ? 2 : 1;
+            const star = this.add.rectangle(x, y, sz, sz, 0xffffff, 0.4 + Math.random() * 0.5);
+            this.tweens.add({
+                targets: star, alpha: { from: 0.05, to: 0.95 },
+                duration: 700 + Math.random() * 1500, yoyo: true, repeat: -1,
+                delay: Math.random() * 2500,
+            });
+        }
+    }
+    buildUI(cx, cy) {
+        // Title — slides down from above
+        const title = this.add.text(cx, cy - 260, 'YOU WIN!', {
+            fontSize: '60px', fontFamily: FONT, color: '#ffe066',
+            stroke: '#000000', strokeThickness: 12,
+        }).setOrigin(0.5).setAlpha(0);
+        // Message lines
+        const msg1 = this.add.text(cx, cy - 70, 'ONE LEVEL DOWN,', {
+            fontSize: '18px', fontFamily: FONT, color: '#ffffff',
+            stroke: '#000', strokeThickness: 4,
+        }).setOrigin(0.5).setAlpha(0);
+        const msg2 = this.add.text(cx, cy - 30, 'MORE TO COME SOON!', {
+            fontSize: '18px', fontFamily: FONT, color: '#80d8ff',
+            stroke: '#000', strokeThickness: 4,
+        }).setOrigin(0.5).setAlpha(0);
+        // Separator
+        const sep = this.add.rectangle(cx, cy + 30, 400, 1, 0x334466, 0).setOrigin(0.5);
+        // Buttons
+        const btnAgain = this.menuButton(cx - 160, cy + 120, 'PLAY AGAIN').setAlpha(0);
+        const btnQuit = this.menuButton(cx + 160, cy + 120, 'QUIT').setAlpha(0);
+        btnAgain.on('pointerdown', () => {
+            this.cameras.main.fadeOut(400, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.registry.set('runRooms', null);
+                this.registry.set('runIndex', 0);
+                this.registry.set('entryDir', null);
+                this.registry.set('persistedAbilities', null);
+                this.registry.set('score', 0);
+                this.scene.start('MenuScene');
+            });
+        });
+        btnQuit.on('pointerdown', () => {
+            this.cameras.main.fadeOut(400, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => {
+                this.registry.set('runRooms', null);
+                this.registry.set('runIndex', 0);
+                this.registry.set('entryDir', null);
+                this.registry.set('persistedAbilities', null);
+                this.registry.set('score', 0);
+                this.scene.start('MenuScene');
+            });
+        });
+        // Register buttons for gamepad navigation
+        this.menuItems = [
+            { text: btnAgain, action: () => btnAgain.emit('pointerdown') },
+            { text: btnQuit, action: () => btnQuit.emit('pointerdown') },
+        ];
+        // Animation sequence
+        this.tweens.add({
+            targets: title,
+            y: cy - 200, alpha: 1,
+            duration: 750, ease: 'Back.Out', delay: 200,
+            onComplete: () => {
+                // Gentle pulse on title
+                this.tweens.add({
+                    targets: title, scaleX: 1.03, scaleY: 1.03,
+                    duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+                });
+                this.tweens.add({ targets: msg1, alpha: 1, duration: 400, delay: 150 });
+                this.tweens.add({
+                    targets: msg2, alpha: 1, duration: 400, delay: 350,
+                    onComplete: () => {
+                        this.tweens.add({ targets: sep, alpha: 0.5, duration: 500 });
+                        this.tweens.add({ targets: [btnAgain, btnQuit], alpha: 1, duration: 400, delay: 200 });
+                    },
+                });
+            },
+        });
+        // Burst of particles on entry (simple circles flying outward)
+        this.time.delayedCall(250, () => this.fireBurst(cx, cy - 200));
+    }
+    fireBurst(cx, cy) {
+        const colors = [0xffe066, 0xff80ab, 0x80d8ff, 0xffffff, 0xffaa00];
+        for (let i = 0; i < 28; i++) {
+            const angle = (i / 28) * Math.PI * 2;
+            const speed = 160 + Math.random() * 180;
+            const c = this.add.rectangle(cx, cy, 5, 5, Phaser.Math.RND.pick(colors), 1);
+            this.tweens.add({
+                targets: c,
+                x: cx + Math.cos(angle) * speed * (1.5 + Math.random()),
+                y: cy + Math.sin(angle) * speed * (0.6 + Math.random()),
+                alpha: 0, scaleX: 0.3, scaleY: 0.3,
+                duration: 900 + Math.random() * 400,
+                ease: 'Quad.Out',
+                onComplete: () => c.destroy(),
+            });
+        }
+    }
+    menuButton(x, y, label) {
+        const btn = this.add.text(x, y, label, {
+            fontSize: '14px', fontFamily: FONT, color: '#ffffff',
+            stroke: '#000', strokeThickness: 3,
+            backgroundColor: '#00000055', padding: { x: 18, y: 10 },
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        btn.on('pointerover', () => btn.setColor('#ffe066'));
+        btn.on('pointerout', () => btn.setColor('#ffffff'));
+        return btn;
+    }
+}
