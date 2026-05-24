@@ -7,7 +7,6 @@ export var AbilityType;
 (function (AbilityType) {
     AbilityType["None"] = "None";
     AbilityType["Fire"] = "Fire";
-    AbilityType["Bomb"] = "Bomb";
     AbilityType["Electric"] = "Electric";
     AbilityType["Ice"] = "Ice";
 })(AbilityType || (AbilityType = {}));

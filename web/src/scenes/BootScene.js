@@ -69,7 +69,7 @@ export class BootScene extends Phaser.Scene {
         this.genInteriorBackgrounds();
         this.setupAnimations();
         this.setupEnemyAnimations();
-        this.scene.start('MenuScene');
+        this.scene.start('IntroScene');
     }
     setupAnimations() {
         for (const [key] of Object.entries(SHEETS)) {
@@ -608,16 +608,6 @@ export class BootScene extends Phaser.Scene {
         fr.fillRect(2, 2, 4, 4);
         fr.generateTexture('fragment', 12, 12);
         fr.destroy();
-        // Bomb
-        const bm = this.g();
-        bm.fillStyle(0x37474f);
-        bm.fillCircle(8, 10, 8);
-        bm.fillStyle(0x607d8b);
-        bm.fillCircle(6, 8, 3);
-        bm.fillStyle(0xff8f00);
-        bm.fillRect(7, 2, 3, 4);
-        bm.generateTexture('bomb', 16, 16);
-        bm.destroy();
         // Small planet / decorations
         this.genPlanet('planet-earth', 48, 0x1a5276, 0x27ae60, 0x85c1e9);
         this.genPlanet('planet-purple', 36, 0x4a148c, 0x7b1fa2, 0xce93d8);
@@ -666,7 +656,242 @@ export class BootScene extends Phaser.Scene {
         this.genLevel1Scenery();
         this.genLevel2Scenery();
         this.genLevel3Scenery();
+        this.genStationRoomProps();
         this.genCollectibles();
+    }
+    // ── station room props (used by the 5 scenery variants) ──────────────────────
+    genStationRoomProps() {
+        // Galaxy viewscreen — wall-mounted monitor (240×130)
+        const vs = this.g();
+        vs.fillStyle(0x1a2a40);
+        vs.fillRect(0, 0, 240, 130);
+        vs.fillStyle(0x263d58);
+        vs.fillRect(0, 0, 240, 6);
+        vs.fillStyle(0x0d1a2a);
+        vs.fillRect(6, 6, 228, 118);
+        vs.fillStyle(0x000814);
+        vs.fillRect(10, 10, 220, 110);
+        vs.fillStyle(0x0a1428, 0.8);
+        vs.fillRect(10, 10, 220, 110);
+        // Stars
+        for (const [sx, sy] of [[24, 22], [68, 18], [105, 35], [148, 15], [180, 42], [210, 24], [35, 75], [90, 82], [130, 60], [175, 90], [220, 55], [55, 50], [160, 70]]) {
+            vs.fillStyle(0xffffff, 0.9);
+            vs.fillRect(sx, sy, 2, 2);
+        }
+        // Galaxy core spiral
+        vs.fillStyle(0x102040, 0.55);
+        vs.fillEllipse(115, 60, 90, 44);
+        vs.fillStyle(0x1a3868, 0.5);
+        vs.fillEllipse(115, 60, 54, 26);
+        vs.fillStyle(0x2244aa, 0.4);
+        vs.fillEllipse(115, 60, 30, 14);
+        vs.fillStyle(0x5577ff, 0.35);
+        vs.fillCircle(115, 60, 8);
+        vs.fillStyle(0xffffff, 0.85);
+        vs.fillRect(114, 59, 3, 3);
+        // Scan lines
+        for (let ly = 12; ly < 116; ly += 4) {
+            vs.fillStyle(0x000000, 0.1);
+            vs.fillRect(10, ly, 220, 2);
+        }
+        // Frame LED row
+        vs.fillStyle(0x2a3e58);
+        vs.fillRect(0, 124, 240, 6);
+        for (let i = 0; i < 7; i++) {
+            vs.fillStyle([0x00ee44, 0xffcc00, 0x00aaff, 0x00ee44, 0xff4400, 0x00aaff, 0xffcc00][i]);
+            vs.fillRect(14 + i * 18, 126, 8, 3);
+        }
+        vs.generateTexture('scn-viewscreen', 240, 130);
+        vs.destroy();
+        // Horizontal pipe bundle — ceiling pipes (200×24)
+        const pb = this.g();
+        pb.fillStyle(0x1a2438);
+        pb.fillRect(0, 0, 200, 24);
+        for (const [py, c1, c2] of [[2, 0x546e7a, 0x78909c], [10, 0x455a64, 0x607d8b], [18, 0x37474f, 0x546e7a]]) {
+            pb.fillStyle(c1);
+            pb.fillRect(0, py, 200, 6);
+            pb.fillStyle(c2);
+            pb.fillRect(0, py, 200, 2);
+            pb.fillStyle(0x1a2a36);
+            pb.fillRect(0, py + 5, 200, 1);
+        }
+        for (let fx = 18; fx < 200; fx += 48) {
+            pb.fillStyle(0x4a607a);
+            pb.fillRect(fx, 0, 12, 24);
+            pb.fillStyle(0x5c7490);
+            pb.fillRect(fx + 1, 1, 10, 5);
+            pb.fillStyle(0x2a3848);
+            pb.fillRect(fx + 1, 18, 10, 5);
+        }
+        pb.generateTexture('scn-pipe-bundle', 200, 24);
+        pb.destroy();
+        // Fuel cylinder — vertical tank (40×88)
+        const fc = this.g();
+        fc.fillStyle(0x455a64);
+        fc.fillRect(6, 8, 28, 72);
+        fc.fillStyle(0x546e7a);
+        fc.fillRect(6, 8, 28, 5);
+        fc.fillStyle(0x263238);
+        fc.fillRect(6, 75, 28, 5);
+        fc.fillStyle(0x37474f);
+        fc.fillRect(3, 16, 34, 5);
+        fc.fillStyle(0x37474f);
+        fc.fillRect(3, 66, 34, 5);
+        fc.fillStyle(0x607d8b);
+        fc.fillRect(7, 10, 4, 70);
+        fc.fillStyle(0xffd600, 0.85);
+        fc.fillRect(14, 36, 12, 16);
+        fc.fillStyle(0x111111);
+        fc.fillRect(14, 36, 12, 4);
+        fc.fillRect(14, 48, 12, 4);
+        fc.fillStyle(0x37474f);
+        fc.fillCircle(32, 34, 6);
+        fc.fillStyle(0x1a2a36);
+        fc.fillCircle(32, 34, 4);
+        fc.fillStyle(0xff1744);
+        fc.fillRect(33, 31, 2, 5);
+        fc.fillStyle(0x263238);
+        fc.fillRect(0, 80, 40, 8);
+        fc.fillStyle(0x37474f);
+        fc.fillRect(4, 80, 32, 4);
+        fc.generateTexture('scn-fuel-cylinder', 40, 88);
+        fc.destroy();
+        // Storage pod — cargo container (60×70)
+        const sp = this.g();
+        sp.fillStyle(0x37474f);
+        sp.fillRect(0, 0, 60, 70);
+        sp.fillStyle(0x546e7a);
+        sp.fillRect(0, 0, 60, 5);
+        sp.fillStyle(0x263238);
+        sp.fillRect(0, 65, 60, 5);
+        sp.fillStyle(0x455a64);
+        sp.fillRect(0, 0, 5, 70);
+        sp.fillRect(55, 0, 5, 70);
+        sp.fillStyle(0x263238);
+        sp.fillRect(0, 34, 60, 2);
+        sp.fillStyle(0xffd600, 0.9);
+        sp.fillRect(8, 8, 44, 12);
+        sp.fillStyle(0x1a1a1a);
+        sp.fillRect(10, 10, 40, 8);
+        sp.fillStyle(0xffd600);
+        sp.fillRect(8, 44, 44, 16);
+        sp.fillStyle(0x111111);
+        sp.fillRect(8, 44, 44, 4);
+        sp.fillRect(8, 56, 44, 4);
+        sp.fillStyle(0x607d8b);
+        sp.fillRect(24, 50, 12, 6);
+        sp.fillStyle(0x37474f);
+        sp.fillRect(26, 52, 8, 2);
+        sp.generateTexture('scn-storage-pod', 60, 70);
+        sp.destroy();
+        // Specimen tank — tall glowing cylinder (34×100)
+        const st2 = this.g();
+        st2.fillStyle(0x37474f);
+        st2.fillRect(0, 0, 34, 8);
+        st2.fillStyle(0x546e7a);
+        st2.fillRect(0, 0, 34, 3);
+        st2.fillStyle(0x1a3040);
+        st2.fillRect(4, 8, 26, 84);
+        st2.fillStyle(0x000e18);
+        st2.fillRect(6, 10, 22, 80);
+        st2.fillStyle(0x003344, 0.85);
+        st2.fillRect(6, 10, 22, 80);
+        st2.fillStyle(0x005566, 0.5);
+        st2.fillRect(7, 12, 18, 72);
+        st2.fillStyle(0x00aabb, 0.22);
+        st2.fillRect(8, 14, 8, 68);
+        st2.fillStyle(0x003344, 0.6);
+        st2.fillEllipse(17, 56, 14, 20);
+        st2.fillStyle(0x37474f);
+        st2.fillRect(0, 92, 34, 8);
+        st2.fillStyle(0x263238);
+        st2.fillRect(0, 96, 34, 4);
+        st2.fillStyle(0x455a64);
+        st2.fillRect(28, 14, 6, 8);
+        st2.fillRect(28, 76, 6, 8);
+        st2.generateTexture('scn-specimen-tank', 34, 100);
+        st2.destroy();
+        // Weapon locker — wall rack (64×80)
+        const wl = this.g();
+        wl.fillStyle(0x263238);
+        wl.fillRect(0, 0, 64, 80);
+        wl.fillStyle(0x37474f);
+        wl.fillRect(3, 3, 58, 74);
+        wl.fillStyle(0x1a2226);
+        wl.fillRect(8, 8, 20, 64);
+        wl.fillRect(36, 8, 20, 64);
+        wl.fillStyle(0x455a64);
+        wl.fillRect(13, 18, 10, 38);
+        wl.fillRect(14, 40, 8, 8);
+        wl.fillStyle(0x546e7a);
+        wl.fillRect(14, 42, 6, 4);
+        wl.fillStyle(0x455a64);
+        wl.fillRect(41, 18, 10, 38);
+        wl.fillRect(42, 40, 8, 8);
+        wl.fillStyle(0x546e7a);
+        wl.fillRect(42, 42, 6, 4);
+        wl.fillStyle(0x00ee44);
+        wl.fillRect(8, 4, 4, 3);
+        wl.fillRect(36, 4, 4, 3);
+        wl.fillStyle(0xff1744);
+        wl.fillRect(52, 4, 4, 3);
+        wl.fillStyle(0x78909c);
+        wl.fillRect(28, 35, 8, 10);
+        wl.fillStyle(0x546e7a);
+        wl.fillRect(29, 36, 6, 5);
+        wl.fillStyle(0x263238);
+        wl.fillCircle(32, 39, 2);
+        wl.generateTexture('scn-weapon-locker', 64, 80);
+        wl.destroy();
+        // Console unit — floor terminal (72×52)
+        const cu = this.g();
+        cu.fillStyle(0x1e2d42);
+        cu.fillRect(0, 0, 72, 52);
+        cu.fillStyle(0x37474f);
+        cu.fillRect(0, 0, 72, 4);
+        cu.fillStyle(0x152030);
+        cu.fillRect(4, 8, 64, 30);
+        cu.fillStyle(0x001833);
+        cu.fillRect(6, 10, 60, 26);
+        cu.fillStyle(0x00aa44, 0.65);
+        cu.fillRect(10, 14, 30, 2);
+        cu.fillStyle(0x00aa44, 0.5);
+        cu.fillRect(10, 18, 48, 2);
+        cu.fillStyle(0x00aa44, 0.45);
+        cu.fillRect(10, 22, 22, 2);
+        cu.fillStyle(0x0055cc, 0.7);
+        cu.fillRect(10, 26, 42, 6);
+        cu.fillStyle(0x263a52);
+        cu.fillRect(4, 40, 64, 8);
+        for (let bi = 0; bi < 8; bi++) {
+            cu.fillStyle([0x00cc44, 0x00cc44, 0x00cc44, 0xffcc00, 0xffcc00, 0x4499ff, 0x4499ff, 0xff4400][bi]);
+            cu.fillRect(6 + bi * 8, 41, 6, 6);
+        }
+        cu.fillStyle(0x263238);
+        cu.fillRect(8, 48, 16, 4);
+        cu.fillRect(48, 48, 16, 4);
+        cu.generateTexture('scn-console-unit', 72, 52);
+        cu.destroy();
+        // Security camera — wall mount (32×22)
+        const sc = this.g();
+        sc.fillStyle(0x263238);
+        sc.fillRect(12, 0, 8, 8);
+        sc.fillStyle(0x37474f);
+        sc.fillRect(8, 6, 16, 12);
+        sc.fillStyle(0x1a2226);
+        sc.fillRect(10, 8, 12, 8);
+        sc.fillStyle(0x000000);
+        sc.fillCircle(16, 12, 4);
+        sc.fillStyle(0x002255);
+        sc.fillCircle(16, 12, 3);
+        sc.fillStyle(0x3366cc);
+        sc.fillCircle(16, 12, 1);
+        sc.fillStyle(0xff1744);
+        sc.fillRect(24, 7, 4, 4);
+        sc.fillStyle(0xff6666, 0.6);
+        sc.fillRect(25, 8, 2, 2);
+        sc.generateTexture('scn-sec-camera', 32, 22);
+        sc.destroy();
     }
     genLevel1Scenery() {
         // Horizontal I-beam girder (192×20)
@@ -1029,22 +1254,6 @@ export class BootScene extends Phaser.Scene {
         ifire.fillRect(7, 7, 2, 5);
         ifire.generateTexture('icon-fire', 16, 16);
         ifire.destroy();
-        const ibomb = this.g();
-        ibomb.fillStyle(0x333333);
-        ibomb.fillRect(3, 5, 10, 7);
-        ibomb.fillRect(4, 4, 8, 1);
-        ibomb.fillRect(4, 12, 8, 1);
-        ibomb.fillRect(2, 6, 2, 5);
-        ibomb.fillRect(12, 6, 2, 5);
-        ibomb.fillStyle(0x8b5e2c);
-        ibomb.fillRect(8, 2, 2, 3);
-        ibomb.fillRect(10, 1, 2, 2);
-        ibomb.fillStyle(0xffdd00);
-        ibomb.fillRect(11, 0, 2, 2);
-        ibomb.fillStyle(0x666666);
-        ibomb.fillRect(5, 7, 3, 3);
-        ibomb.generateTexture('icon-bomb', 16, 16);
-        ibomb.destroy();
         const ielec = this.g();
         ielec.fillStyle(0xffdd00);
         ielec.fillRect(9, 1, 4, 6);

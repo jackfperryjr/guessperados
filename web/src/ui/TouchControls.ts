@@ -33,9 +33,9 @@ export class TouchControls {
     const by = height - 65
 
     this.btn(bx,       by,       '▲', 0x4fc3f7, () => { this.jumpHeld = true },   () => { this.jumpHeld = false })
-    this.btn(bx - 70,  by,       'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
+    this.btn(bx - 70,  by,       '⚔', 0xff8a65, () => { this.rapierJust  = true })
     this.btn(bx,       by - 70,  'X',  0xa5d6a7, () => { this.abilityJust = true })
-    this.btn(bx - 70,  by - 70,  '⚔', 0xff8a65, () => { this.rapierJust = true })
+    this.btn(bx - 70,  by - 70,  'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
   }
 
   private btn(
