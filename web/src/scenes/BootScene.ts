@@ -1005,6 +1005,7 @@ export class BootScene extends Phaser.Scene {
     this.genStationInterior()
     this.genCaveRock()
     this.genMagmaWall()
+    this.genSciFiBackgrounds()
   }
 
   private genStationInterior() {
@@ -1232,6 +1233,604 @@ export class BootScene extends Phaser.Scene {
       gm.lineStyle(1, 0xff6600, 0.28); gm.lineBetween(x, y, x2, y2)
     }
     gm.generateTexture('bg-magma-heat', 512, 512); gm.destroy()
+  }
+
+  // ── sci-fi space-castle backgrounds ─────────────────────────────────────────
+
+  private genSciFiBackgrounds() {
+    this.genReactorCore()
+    this.genCommandHull()
+    this.genHullBreach()
+    this.genCoolantBay()
+    this.genNavBay()
+    this.genThroneHall()
+    this.genBridgeDeck()
+  }
+
+  // ── Reactor Core: deep violet hull, conduit pipes, glowing column housings ──
+
+  private genReactorCore() {
+    const g = this.g()
+    g.fillStyle(0x06020e); g.fillRect(0, 0, 512, 512)
+
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x100620 : 0x0c041a)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x1e0a3a); g.fillRect(0, py,       512, 2)
+      g.fillStyle(0x030108); g.fillRect(0, py + 126, 512, 2)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x030108); g.fillRect(px, py + 2, 2, 124)
+        g.fillStyle(0x180840); g.fillRect(px + 2, py + 2, 1, 124)
+        g.fillStyle(0x2a0e50); g.fillRect(px + 6,  py + 6,   8, 8)
+        g.fillStyle(0x3d1470); g.fillRect(px + 7,  py + 7,   4, 2)
+        g.fillStyle(0x030108); g.fillRect(px + 9,  py + 9,   4, 4)
+        g.fillStyle(0x2a0e50); g.fillRect(px + 6,  py + 114, 8, 8)
+        g.fillStyle(0x3d1470); g.fillRect(px + 7,  py + 115, 4, 2)
+      }
+    }
+
+    const pY = 248
+    g.fillStyle(0x160632); g.fillRect(0, pY,      512, 20)
+    g.fillStyle(0x280c60); g.fillRect(0, pY,      512,  5)
+    g.fillStyle(0x350f80); g.fillRect(0, pY + 1,  512,  3)
+    g.fillStyle(0x040010); g.fillRect(0, pY + 16, 512,  4)
+    for (let fx = 18; fx < 512; fx += 72) {
+      g.fillStyle(0x200a50); g.fillRect(fx,     pY - 6, 14, 32)
+      g.fillStyle(0x320e78); g.fillRect(fx + 1, pY - 5, 12,  5)
+      g.fillStyle(0x030108); g.fillRect(fx + 1, pY + 24, 12, 5)
+      g.fillStyle(0x7700cc); g.fillRect(fx + 4, pY + 6,  6,  8)
+      g.fillStyle(0xaa44ff); g.fillRect(fx + 5, pY + 7,  4,  3)
+    }
+    for (const vx of [128, 384]) {
+      g.fillStyle(0x14062a); g.fillRect(vx - 10, 0, 20, 512)
+      g.fillStyle(0x220a4a); g.fillRect(vx - 8,  0,  4, 512)
+      g.fillStyle(0x030108); g.fillRect(vx + 4,  0,  4, 512)
+      for (let vy = 40; vy < 512; vy += 96) {
+        g.fillStyle(0x5500aa); g.fillRect(vx - 6, vy,     12, 10)
+        g.fillStyle(0x8822dd); g.fillRect(vx - 4, vy + 1,  8,  4)
+        g.fillStyle(0xcc66ff); g.fillRect(vx - 2, vy + 2,  4,  2)
+      }
+    }
+    g.fillStyle(0x0e0422); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x220a48); g.fillRect(0, 2, 512, 4)
+    g.fillStyle(0x0a0418); g.fillRect(0, 378, 512, 10)
+    for (let vx = 4; vx < 512; vx += 12) {
+      g.fillStyle(0x0e0620); g.fillRect(vx,     380, 8, 6)
+      g.fillStyle(0x04010a); g.fillRect(vx + 1, 381, 4, 4)
+    }
+    for (const [ex, ey] of [[64, 80], [192, 320], [320, 160], [448, 400], [96, 440], [416, 60]] as [number,number][]) {
+      g.fillStyle(0x0e0420); g.fillRect(ex - 14, ey - 10, 28, 20)
+      g.fillStyle(0x16064a); g.fillRect(ex - 12, ey - 8,  24, 16)
+      g.fillStyle(0x200868); g.fillRect(ex - 11, ey - 7,  22, 14)
+      g.fillStyle(0x7700cc); g.fillRect(ex - 10, ey + 4,   4,  4)
+      g.fillStyle(0xaa33ff); g.fillRect(ex - 5,  ey + 4,   4,  4)
+    }
+    g.generateTexture('bg-reactor-core', 512, 512); g.destroy()
+
+    const gm = this.g()
+    for (let i = 0; i < 8; i++) {
+      gm.fillStyle(0x1a0040, 0.05 - i * 0.005); gm.fillRect(0, i * 5, 512, 5)
+    }
+    gm.fillStyle(0x280060, 0.15); gm.fillRect(0, pY - 10, 512, 40)
+    gm.fillStyle(0x3d0090, 0.10); gm.fillRect(0, pY - 4,  512, 28)
+    for (const vx of [128, 384]) {
+      gm.fillStyle(0x3d0090, 0.18); gm.fillEllipse(vx, 256, 50, 512)
+      gm.fillStyle(0x6600cc, 0.08); gm.fillEllipse(vx, 256, 24, 256)
+    }
+    for (const [ex, ey] of [[64, 80], [320, 160], [448, 400]] as [number,number][]) {
+      gm.fillStyle(0x5500aa, 0.18); gm.fillEllipse(ex, ey, 60, 30)
+      gm.fillStyle(0x8800ff, 0.10); gm.fillEllipse(ex, ey, 28, 14)
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x0c0022, 0.03); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-reactor-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Command Hull: amber terminal rows, warning strips, inhabited steel ───────
+
+  private genCommandHull() {
+    const g = this.g()
+    g.fillStyle(0x08090f); g.fillRect(0, 0, 512, 512)
+
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x111520 : 0x0d1018)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x1c2438); g.fillRect(0, py,       512, 2)
+      g.fillStyle(0x040508); g.fillRect(0, py + 126, 512, 2)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x040508); g.fillRect(px,     py + 2, 2, 124)
+        g.fillStyle(0x182030); g.fillRect(px + 2, py + 2, 1, 124)
+        g.fillStyle(0x243040); g.fillRect(px + 6,  py + 6,   8, 8)
+        g.fillStyle(0x344860); g.fillRect(px + 7,  py + 7,   4, 2)
+        g.fillStyle(0x040508); g.fillRect(px + 9,  py + 9,   4, 4)
+        g.fillStyle(0x243040); g.fillRect(px + 6,  py + 114, 8, 8)
+      }
+    }
+
+    // Terminal monitor rows at y≈165 and y≈390
+    for (const tY of [165, 390]) {
+      g.fillStyle(0x0c1220); g.fillRect(0, tY - 4, 512, 36)
+      g.fillStyle(0x141e2e); g.fillRect(0, tY - 2, 512, 3)
+      g.fillStyle(0x040508); g.fillRect(0, tY + 30, 512, 3)
+      for (let tx = 8; tx < 512; tx += 56) {
+        g.fillStyle(0x0a1020); g.fillRect(tx,     tY,      44, 22)
+        g.fillStyle(0x001428); g.fillRect(tx + 2, tY + 2,  40, 18)
+        // Screen content (data lines)
+        g.fillStyle(0x00aa44, 0.7); g.fillRect(tx + 4, tY + 5,  28, 2)
+        g.fillStyle(0x00aa44, 0.5); g.fillRect(tx + 4, tY + 9,  20, 2)
+        g.fillStyle(0x0055cc, 0.6); g.fillRect(tx + 4, tY + 13, 34, 5)
+        // Status LEDs
+        g.fillStyle(0x00ee44); g.fillRect(tx + 36, tY + 4, 4, 4)
+        g.fillStyle(0xffcc00); g.fillRect(tx + 36, tY + 10, 4, 4)
+      }
+    }
+
+    // Emergency amber lighting strips at y≈120 and y≈450
+    for (const lY of [120, 450]) {
+      g.fillStyle(0x1a1000); g.fillRect(0, lY, 512, 6)
+      for (let lx = 0; lx < 512; lx += 64) {
+        g.fillStyle(0x4a2800); g.fillRect(lx,      lY + 1, 52, 4)
+        g.fillStyle(0x7a4400); g.fillRect(lx + 4,  lY + 1, 44, 2)
+        g.fillStyle(0x2a1400); g.fillRect(lx + 52, lY + 1, 12, 4)
+      }
+    }
+
+    // Warning chevron tape across bottom panel seam
+    for (let wx = 0; wx < 512; wx += 20) {
+      g.fillStyle(wx % 40 === 0 ? 0x3a2000 : 0x0a0800)
+      g.fillRect(wx, 254, 20, 5)
+    }
+
+    g.fillStyle(0x0c1018); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x1a2030, 0.8); g.fillRect(0, 2, 512, 4)
+    g.fillStyle(0x080a10); g.fillRect(0, 378, 512, 10)
+    for (let vx = 4; vx < 512; vx += 12) {
+      g.fillStyle(0x0e1220); g.fillRect(vx,     380, 8, 6)
+      g.fillStyle(0x060810); g.fillRect(vx + 1, 381, 4, 4)
+    }
+    g.generateTexture('bg-command-hull', 512, 512); g.destroy()
+
+    const gm = this.g()
+    for (const tY of [165, 390]) {
+      gm.fillStyle(0x002010, 0.20); gm.fillRect(0, tY - 8,  512, 44)
+      gm.fillStyle(0x001800, 0.12); gm.fillRect(0, tY,      512, 22)
+      for (let tx = 8; tx < 512; tx += 56) {
+        gm.fillStyle(0x001c08, 0.25); gm.fillEllipse(tx + 22, tY + 11, 52, 26)
+        gm.fillStyle(0x004418, 0.15); gm.fillEllipse(tx + 22, tY + 11, 24, 12)
+      }
+    }
+    for (const lY of [120, 450]) {
+      gm.fillStyle(0x200e00, 0.20); gm.fillRect(0, lY - 6, 512, 18)
+      for (let lx = 0; lx < 512; lx += 64) {
+        gm.fillStyle(0x3c1800, 0.15); gm.fillEllipse(lx + 26, lY + 3, 64, 16)
+        gm.fillStyle(0x6a2c00, 0.08); gm.fillEllipse(lx + 26, lY + 3, 30,  8)
+      }
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x0a0600, 0.025); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-command-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Hull Breach: cracked panels, starfield visible through ruptures ──────────
+
+  private genHullBreach() {
+    const g = this.g()
+    g.fillStyle(0x06080e); g.fillRect(0, 0, 512, 512)
+
+    // Structural frame — wider beams, darker
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x0c1018 : 0x080c14)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x14202e); g.fillRect(0, py,       512, 2)
+      g.fillStyle(0x030408); g.fillRect(0, py + 126, 512, 2)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x030408); g.fillRect(px,     py + 2, 2, 124)
+        g.fillStyle(0x10182a); g.fillRect(px + 2, py + 2, 1, 124)
+        g.fillStyle(0x141e2c); g.fillRect(px + 6,  py + 6,   8, 8)
+        g.fillStyle(0x04060c); g.fillRect(px + 9,  py + 9,   4, 4)
+        g.fillStyle(0x141e2c); g.fillRect(px + 6,  py + 114, 8, 8)
+      }
+    }
+
+    // Breach "windows" — hull ruptures showing starfield
+    const breachAreas: [number, number, number, number][] = [
+      [80, 55, 200, 110],   // upper-left breach
+      [310, 180, 160, 80],  // mid breach
+      [60, 310, 100, 60],   // lower-left
+      [360, 370, 140, 100], // lower-right breach
+    ]
+    for (const [bx, by, bw, bh] of breachAreas) {
+      // Deep space void inside breach
+      g.fillStyle(0x020408); g.fillRect(bx, by, bw, bh)
+      g.fillStyle(0x03050c, 0.8); g.fillRect(bx + 2, by + 2, bw - 4, bh - 4)
+      // Stars scattered inside breach
+      for (let s = 0; s < 18; s++) {
+        const sx = bx + 4 + Math.floor(s * bw / 18)
+        const sy = by + 4 + Math.floor((s * 37) % (bh - 8))
+        const sv = 160 + Math.floor((s * 53) % 95)
+        g.fillStyle(Phaser.Display.Color.GetColor(sv, sv, Math.min(255, sv + 40)))
+        g.fillRect(sx, sy, s % 4 === 0 ? 2 : 1, s % 4 === 0 ? 2 : 1)
+      }
+      // Faint nebula blob inside breach
+      g.fillStyle(0x0a1428, 0.4); g.fillEllipse(bx + bw / 2, by + bh / 2, bw * 0.6, bh * 0.5)
+      g.fillStyle(0x0e1e3a, 0.25); g.fillEllipse(bx + bw / 2, by + bh / 2, bw * 0.3, bh * 0.25)
+      // Jagged breach edge (notches cut into border)
+      g.fillStyle(0x06080e)
+      g.fillRect(bx,           by,          6, 6)
+      g.fillRect(bx + bw - 6,  by,          6, 6)
+      g.fillRect(bx,           by + bh - 6, 6, 6)
+      g.fillRect(bx + bw - 6,  by + bh - 6, 6, 6)
+      // Crack lines from breach corners (3-4px bent lines)
+      g.lineStyle(2, 0x0a1218, 0.9)
+      g.lineBetween(bx, by, bx - 12, by - 18)
+      g.lineBetween(bx + bw, by, bx + bw + 10, by - 15)
+      g.lineBetween(bx, by + bh, bx - 8, by + bh + 14)
+      g.lineStyle(1, 0x080e14, 0.6)
+      g.lineBetween(bx + bw / 2, by, bx + bw / 2 + 6, by - 22)
+    }
+
+    g.fillStyle(0x0a0e16); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x14202e, 0.8); g.fillRect(0, 2, 512, 4)
+    g.generateTexture('bg-hull-breach', 512, 512); g.destroy()
+
+    const gm = this.g()
+    // Cold blue-white light emanating from breach areas
+    for (const [bx, by, bw, bh] of breachAreas) {
+      gm.fillStyle(0x0a1830, 0.28); gm.fillEllipse(bx + bw / 2, by + bh / 2, bw + 80, bh + 50)
+      gm.fillStyle(0x102240, 0.18); gm.fillEllipse(bx + bw / 2, by + bh / 2, bw + 40, bh + 25)
+      gm.fillStyle(0x1a3460, 0.10); gm.fillEllipse(bx + bw / 2, by + bh / 2, bw,      bh)
+    }
+    // Subtle cold ambient
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x060c18, 0.03); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-breach-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Coolant Bay: cylindrical tanks, teal pipe networks ──────────────────────
+
+  private genCoolantBay() {
+    const g = this.g()
+    g.fillStyle(0x04080c); g.fillRect(0, 0, 512, 512)
+
+    // Dark teal base panels
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x080f14 : 0x060c10)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x0e1e28); g.fillRect(0, py,       512, 2)
+      g.fillStyle(0x030508); g.fillRect(0, py + 126, 512, 2)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x030508); g.fillRect(px,     py + 2, 2, 124)
+        g.fillStyle(0x0a1820); g.fillRect(px + 2, py + 2, 1, 124)
+        g.fillStyle(0x102030); g.fillRect(px + 6,  py + 6,   8, 8)
+        g.fillStyle(0x1a3448); g.fillRect(px + 7,  py + 7,   4, 2)
+        g.fillStyle(0x030508); g.fillRect(px + 9,  py + 9,   4, 4)
+        g.fillStyle(0x102030); g.fillRect(px + 6,  py + 114, 8, 8)
+      }
+    }
+
+    // Coolant tank cross-sections (front-view cylinders, repeating)
+    const tanks: [number, number, number][] = [
+      [90, 100, 44], [240, 80, 36], [380, 110, 50],
+      [60, 290, 38], [200, 310, 44], [340, 280, 36], [470, 300, 42],
+      [130, 440, 40], [310, 460, 34], [440, 430, 46],
+    ]
+    for (const [tx, ty, tr] of tanks) {
+      g.fillStyle(0x0e2030);      g.fillCircle(tx, ty, tr)
+      g.fillStyle(0x163040);      g.fillCircle(tx, ty, tr - 4)
+      g.fillStyle(0x0a1822);      g.fillCircle(tx, ty, tr - 8)
+      g.fillStyle(0x001c2a, 0.8); g.fillCircle(tx, ty, tr - 12)
+      // Tank highlight arc (top-left sheen)
+      g.fillStyle(0x204858, 0.7); g.fillEllipse(tx - tr * 0.3, ty - tr * 0.3, tr * 0.5, tr * 0.3)
+      // Coolant level indicator
+      g.fillStyle(0x007a8a); g.fillRect(tx + tr - 8, ty - 12, 5, 24)
+      g.fillStyle(0x00b5c8); g.fillRect(tx + tr - 7, ty,      3, 12)
+      g.fillStyle(0x00e5ff); g.fillRect(tx + tr - 7, ty + 4,  3,  4)
+    }
+
+    // Horizontal pipe network
+    for (const [pY, col] of [[195, 0x0d2a34], [380, 0x0a2430]] as [number, number][]) {
+      g.fillStyle(col);          g.fillRect(0, pY,      512, 8)
+      g.fillStyle(0x143844);     g.fillRect(0, pY,      512, 3)
+      g.fillStyle(0x030810);     g.fillRect(0, pY + 6,  512, 2)
+      for (let fx = 22; fx < 512; fx += 68) {
+        g.fillStyle(0x102030);   g.fillRect(fx, pY - 4, 12, 16)
+        g.fillStyle(0x1c3e52);   g.fillRect(fx + 1, pY - 3, 10, 4)
+        g.fillStyle(0x00aabb);   g.fillRect(fx + 4, pY + 2,  4,  5)
+      }
+    }
+    // Vertical pipe drops at x≈170, x≈340
+    for (const vx of [170, 340]) {
+      g.fillStyle(0x0d2a34); g.fillRect(vx,     0, 8, 512)
+      g.fillStyle(0x143844); g.fillRect(vx,     0, 3, 512)
+      g.fillStyle(0x030810); g.fillRect(vx + 6, 0, 2, 512)
+      for (let vy = 20; vy < 512; vy += 80) {
+        g.fillStyle(0x00aabb); g.fillRect(vx + 1, vy, 6, 5)
+        g.fillStyle(0x00e5ff); g.fillRect(vx + 2, vy + 1, 4, 2)
+      }
+    }
+
+    g.fillStyle(0x060c12); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x0e1c28, 0.8); g.fillRect(0, 2, 512, 4)
+    g.generateTexture('bg-coolant-bay', 512, 512); g.destroy()
+
+    const gm = this.g()
+    for (const [tx, ty, tr] of tanks) {
+      gm.fillStyle(0x001828, 0.22); gm.fillEllipse(tx, ty, (tr + 30) * 2, (tr + 18) * 1.4)
+      gm.fillStyle(0x003040, 0.14); gm.fillEllipse(tx, ty, tr * 1.8,      tr * 1.1)
+      gm.fillStyle(0x00aabb, 0.06); gm.fillEllipse(tx, ty, tr * 1.0,      tr * 0.6)
+    }
+    for (const [pY] of [[195], [380]] as [number][]) {
+      gm.fillStyle(0x002030, 0.18); gm.fillRect(0, pY - 8, 512, 24)
+    }
+    for (const vx of [170, 340]) {
+      gm.fillStyle(0x002030, 0.14); gm.fillEllipse(vx + 4, 256, 30, 512)
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x000e14, 0.03); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-coolant-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Nav Bay: deep indigo, holographic orbital ring charts ───────────────────
+
+  private genNavBay() {
+    const g = this.g()
+    g.fillStyle(0x03030a); g.fillRect(0, 0, 512, 512)
+
+    // Very dark hull — barely visible seams
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x07070f : 0x050510)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x0e0e1c); g.fillRect(0, py,       512, 2)
+      g.fillStyle(0x020208); g.fillRect(0, py + 126, 512, 2)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x020208); g.fillRect(px,     py + 2, 2, 124)
+        g.fillStyle(0x0a0a18); g.fillRect(px + 2, py + 2, 1, 124)
+        g.fillStyle(0x0e0e20); g.fillRect(px + 6,  py + 6,   8, 8)
+        g.fillStyle(0x020208); g.fillRect(px + 9,  py + 9,   4, 4)
+      }
+    }
+
+    // Holographic star chart rings at several positions
+    const charts: [number, number, number][] = [
+      [128, 140, 55], [384, 100, 45], [256, 370, 65],
+      [80,  420, 35], [440, 360, 42],
+    ]
+    for (const [cx, cy, r] of charts) {
+      // Outer rings (faint)
+      g.lineStyle(1, 0x0a1444, 0.8); g.strokeCircle(cx, cy, r)
+      g.lineStyle(1, 0x0c1850, 0.7); g.strokeCircle(cx, cy, r * 0.75)
+      g.lineStyle(1, 0x0e1c5a, 0.6); g.strokeCircle(cx, cy, r * 0.52)
+      g.lineStyle(1, 0x122060, 0.5); g.strokeCircle(cx, cy, r * 0.32)
+      // Centre dot
+      g.fillStyle(0x182870, 0.8); g.fillCircle(cx, cy, 3)
+      g.fillStyle(0x2a44cc, 0.6); g.fillCircle(cx, cy, 2)
+      g.fillStyle(0x4466ff, 0.5); g.fillCircle(cx, cy, 1)
+      // Cross-hair lines through chart
+      g.lineStyle(1, 0x0a1440, 0.4)
+      g.lineBetween(cx - r, cy, cx + r, cy)
+      g.lineBetween(cx, cy - r, cx, cy + r)
+      // Tiny orbital dots on the rings
+      for (let a = 0; a < 4; a++) {
+        const ang = (a / 4) * Math.PI * 2
+        g.fillStyle(0x1e3488, 0.7)
+        g.fillRect(
+          Math.round(cx + Math.cos(ang) * r * 0.75) - 1,
+          Math.round(cy + Math.sin(ang) * r * 0.75) - 1,
+          2, 2
+        )
+      }
+    }
+
+    // Sparse star scatter
+    for (let i = 0; i < 55; i++) {
+      const sx = (i * 97 + 11) % 512
+      const sy = (i * 67 + 23) % 512
+      const sv = 80 + (i * 37) % 80
+      g.fillStyle(Phaser.Display.Color.GetColor(sv, sv, Math.min(255, sv + 50)))
+      g.fillRect(sx, sy, i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1)
+    }
+
+    // Ceiling / floor housing strips — nearly invisible
+    g.fillStyle(0x07070e); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x0c0c1a, 0.7); g.fillRect(0, 2, 512, 4)
+    g.generateTexture('bg-nav-bay', 512, 512); g.destroy()
+
+    const gm = this.g()
+    for (const [cx, cy, r] of charts) {
+      gm.fillStyle(0x060a2a, 0.25); gm.fillEllipse(cx, cy, r * 3, r * 2.2)
+      gm.fillStyle(0x0a1040, 0.15); gm.fillEllipse(cx, cy, r * 1.8, r * 1.4)
+      gm.fillStyle(0x1020a0, 0.06); gm.fillEllipse(cx, cy, r * 0.8, r * 0.6)
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x04040e, 0.025); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-nav-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Throne Hall: command dais, gold/blue holographic pillars ─────────────────
+
+  private genThroneHall() {
+    const g = this.g()
+    g.fillStyle(0x060510); g.fillRect(0, 0, 512, 512)
+
+    // Grander hull — wider vertical columns every 128px
+    for (let col = 0; col < 4; col++) {
+      const px = col * 128
+      g.fillStyle(0x0c0a1c); g.fillRect(px + 4, 0, 120, 512)
+      g.fillStyle(0x100e24); g.fillRect(px + 4, 0, 120, 4)
+      // Column edge trim (gold accent)
+      g.fillStyle(0x1e1600); g.fillRect(px,     0,  4, 512)
+      g.fillStyle(0x2e2200); g.fillRect(px + 1, 0,  2, 512)
+      g.fillStyle(0x181200); g.fillRect(px + 2, 0,  1, 512)
+      g.fillStyle(0x1e1600); g.fillRect(px + 124, 0, 4, 512)
+    }
+    // Horizontal band seams
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(0x0e0c1e); g.fillRect(0, py, 512, 3)
+      g.fillStyle(0x1a1530); g.fillRect(0, py, 512, 1)
+      // Gold accent ticks at column intersections
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x4a3800); g.fillRect(px,     py, 4, 6)
+        g.fillStyle(0x7a6000); g.fillRect(px + 1, py, 2, 3)
+      }
+    }
+
+    // Central holographic pillar at x=256 — tall glowing column
+    g.fillStyle(0x0a0818); g.fillRect(248, 0, 16, 512)
+    g.fillStyle(0x100e24); g.fillRect(250, 0, 12, 512)
+    for (let py = 0; py < 512; py += 80) {
+      g.fillStyle(0x1a1060); g.fillRect(248, py,      16, 10)
+      g.fillStyle(0x2a1888); g.fillRect(249, py + 1,  14,  4)
+      g.fillStyle(0x3a20b0); g.fillRect(250, py + 2,  12,  2)
+      g.fillStyle(0x6644ff); g.fillRect(252, py + 2,   8,  2)
+    }
+
+    // Holographic display panels on side walls
+    for (const [ex, ey, ew, eh, ec] of [
+      [40,  80,  80, 50, 0x003850],
+      [392, 80,  80, 50, 0x003850],
+      [40,  330, 80, 50, 0x380020],
+      [392, 330, 80, 50, 0x380020],
+    ] as [number,number,number,number,number][]) {
+      g.fillStyle(0x08060e); g.fillRect(ex, ey, ew, eh)
+      g.fillStyle(ec);       g.fillRect(ex + 2, ey + 2, ew - 4, eh - 4)
+      g.fillStyle(0x000000, 0.6); g.fillRect(ex + 4, ey + 4, ew - 8, eh - 8)
+      // Grid lines on display
+      for (let dy = ey + 8; dy < ey + eh - 4; dy += 8) {
+        g.fillStyle(0x00ccff, 0.15); g.fillRect(ex + 4, dy, ew - 8, 1)
+      }
+      // Corner brackets
+      g.fillStyle(0x00aacc); g.fillRect(ex + 2, ey + 2,  8, 2); g.fillRect(ex + 2, ey + 2, 2, 8)
+      g.fillStyle(0x00aacc); g.fillRect(ex + ew - 10, ey + 2, 8, 2); g.fillRect(ex + ew - 4, ey + 2, 2, 8)
+    }
+
+    g.fillStyle(0x0a0818); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x181030, 0.8); g.fillRect(0, 2, 512, 4)
+    // Gold floor accent strip
+    g.fillStyle(0x1e1600); g.fillRect(0, 506, 512, 6)
+    g.fillStyle(0x3a2800); g.fillRect(0, 506, 512, 2)
+    g.generateTexture('bg-throne-hall', 512, 512); g.destroy()
+
+    const gm = this.g()
+    // Blue holo panel glows
+    for (const [ex, ey, ew, eh] of [[40, 80, 80, 50], [392, 80, 80, 50]] as [number,number,number,number][]) {
+      gm.fillStyle(0x001c30, 0.25); gm.fillEllipse(ex + ew / 2, ey + eh / 2, ew + 60, eh + 40)
+      gm.fillStyle(0x003858, 0.15); gm.fillEllipse(ex + ew / 2, ey + eh / 2, ew + 20, eh + 14)
+    }
+    // Red panel glows
+    for (const [ex, ey, ew, eh] of [[40, 330, 80, 50], [392, 330, 80, 50]] as [number,number,number,number][]) {
+      gm.fillStyle(0x1c000e, 0.22); gm.fillEllipse(ex + ew / 2, ey + eh / 2, ew + 60, eh + 40)
+    }
+    // Central pillar glow
+    gm.fillStyle(0x1a0860, 0.22); gm.fillEllipse(256, 256, 80, 512)
+    gm.fillStyle(0x2a10a0, 0.10); gm.fillEllipse(256, 256, 36, 256)
+    // Gold column trim glow
+    for (let col = 0; col < 4; col++) {
+      const px = col * 128
+      gm.fillStyle(0x1e1000, 0.12); gm.fillEllipse(px + 2, 256, 14, 512)
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x080410, 0.03); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-throne-glow', 512, 512); gm.destroy()
+  }
+
+  // ── Bridge Deck: massive viewport showing red nebula, ominous command bridge ─
+
+  private genBridgeDeck() {
+    const g = this.g()
+    g.fillStyle(0x060408); g.fillRect(0, 0, 512, 512)
+
+    // Heavy structural frame
+    for (let row = 0; row < 4; row++) {
+      const py = row * 128
+      g.fillStyle(row % 2 === 0 ? 0x0c080e : 0x080608)
+      g.fillRect(0, py + 2, 512, 124)
+      g.fillStyle(0x14101a); g.fillRect(0, py,       512, 3)
+      g.fillStyle(0x020104); g.fillRect(0, py + 125, 512, 3)
+      for (let col = 0; col < 4; col++) {
+        const px = col * 128
+        g.fillStyle(0x020104); g.fillRect(px,     py + 2, 3, 124)
+        g.fillStyle(0x100c14); g.fillRect(px + 3, py + 2, 1, 124)
+        g.fillStyle(0x16101e); g.fillRect(px + 7,  py + 7,   6, 6)
+        g.fillStyle(0x020104); g.fillRect(px + 9,  py + 9,   3, 3)
+      }
+    }
+
+    // Main viewport — large dark window showing red nebula
+    const vpX = 80, vpY = 60, vpW = 352, vpH = 200
+    g.fillStyle(0x030105); g.fillRect(vpX, vpY, vpW, vpH)
+    // Nebula layers inside viewport
+    g.fillStyle(0x1a0408, 0.5); g.fillEllipse(vpX + vpW * 0.4, vpY + vpH * 0.5, vpW * 0.7, vpH * 0.6)
+    g.fillStyle(0x280608, 0.3); g.fillEllipse(vpX + vpW * 0.6, vpY + vpH * 0.4, vpW * 0.5, vpH * 0.4)
+    g.fillStyle(0x3a0c0c, 0.2); g.fillEllipse(vpX + vpW * 0.3, vpY + vpH * 0.6, vpW * 0.4, vpH * 0.3)
+    g.fillStyle(0x120208, 0.3); g.fillEllipse(vpX + vpW * 0.7, vpY + vpH * 0.3, vpW * 0.3, vpH * 0.35)
+    // Stars in viewport
+    for (let i = 0; i < 28; i++) {
+      const sx = vpX + 4 + (i * 83) % (vpW - 8)
+      const sy = vpY + 4 + (i * 61) % (vpH - 8)
+      const sv = 120 + (i * 41) % 80
+      g.fillStyle(Phaser.Display.Color.GetColor(sv, Math.floor(sv * 0.6), Math.floor(sv * 0.6)))
+      g.fillRect(sx, sy, i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1)
+    }
+    // Viewport frame
+    g.lineStyle(4, 0x1e1420, 1); g.strokeRect(vpX, vpY, vpW, vpH)
+    g.lineStyle(2, 0x2a1c30, 0.8); g.strokeRect(vpX + 2, vpY + 2, vpW - 4, vpH - 4)
+    // Viewport corner brackets
+    for (const [cx, cy] of [[vpX, vpY], [vpX + vpW, vpY], [vpX, vpY + vpH], [vpX + vpW, vpY + vpH]] as [number,number][]) {
+      const dx = cx === vpX ? 1 : -1, dy = cy === vpY ? 1 : -1
+      g.fillStyle(0x2a1c38)
+      g.fillRect(cx,          cy,          dx * 16, 3)
+      g.fillRect(cx,          cy,          3,       dy * 16)
+    }
+
+    // Tactical console silhouettes below viewport
+    for (let cx = 60; cx < 512; cx += 110) {
+      g.fillStyle(0x0a0810); g.fillRect(cx, 310, 80, 40)
+      g.fillStyle(0x0e0c18); g.fillRect(cx + 2, 312, 76, 36)
+      g.fillStyle(0x010003); g.fillRect(cx + 6, 316, 68, 28)
+      // Console screen (very dim red)
+      g.fillStyle(0x280008, 0.6); g.fillRect(cx + 8, 318, 64, 24)
+      g.fillStyle(0x1a0005, 0.8); g.fillRect(cx + 10, 320, 60, 20)
+      // Warning red LEDs
+      g.fillStyle(0x880010); g.fillRect(cx + 62, 313, 4, 4)
+      g.fillStyle(0xff0022); g.fillRect(cx + 63, 314, 2, 2)
+    }
+
+    g.fillStyle(0x08060c); g.fillRect(0, 0, 512, 8)
+    g.fillStyle(0x120e1c, 0.8); g.fillRect(0, 2, 512, 4)
+    g.generateTexture('bg-bridge-deck', 512, 512); g.destroy()
+
+    const gm = this.g()
+    // Red nebula viewport glow
+    gm.fillStyle(0x1c0008, 0.30); gm.fillEllipse(vpX + vpW / 2, vpY + vpH / 2, vpW + 100, vpH + 80)
+    gm.fillStyle(0x280010, 0.20); gm.fillEllipse(vpX + vpW / 2, vpY + vpH / 2, vpW + 40,  vpH + 30)
+    gm.fillStyle(0x3a0018, 0.12); gm.fillEllipse(vpX + vpW / 2, vpY + vpH / 2, vpW,       vpH)
+    // Console warning red glow
+    for (let cx = 60; cx < 512; cx += 110) {
+      gm.fillStyle(0x1c0008, 0.20); gm.fillEllipse(cx + 40, 330, 100, 50)
+      gm.fillStyle(0x280010, 0.12); gm.fillEllipse(cx + 40, 330, 50,  25)
+    }
+    for (let y = 0; y < 512; y += 6) {
+      gm.fillStyle(0x0a0406, 0.03); gm.fillRect(0, y, 512, 3)
+    }
+    gm.generateTexture('bg-bridge-glow', 512, 512); gm.destroy()
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────────

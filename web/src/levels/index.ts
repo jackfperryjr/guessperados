@@ -42,12 +42,18 @@ export interface RoomConfig {
   items: ItemSpawn[]
 }
 
-const T1 = { tileset: 'tile-metal', bgFar: 'bg-station-interior', bgMid: 'bg-station-glow' }
+const REACTOR  = { tileset: 'tile-metal', bgFar: 'bg-reactor-core',  bgMid: 'bg-reactor-glow'  }
+const COMMAND  = { tileset: 'tile-metal', bgFar: 'bg-command-hull',  bgMid: 'bg-command-glow'  }
+const BREACH   = { tileset: 'tile-metal', bgFar: 'bg-hull-breach',   bgMid: 'bg-breach-glow'   }
+const COOLANT  = { tileset: 'tile-metal', bgFar: 'bg-coolant-bay',   bgMid: 'bg-coolant-glow'  }
+const NAVBAY   = { tileset: 'tile-metal', bgFar: 'bg-nav-bay',       bgMid: 'bg-nav-glow'      }
+const THRONE_T = { tileset: 'tile-metal', bgFar: 'bg-throne-hall',   bgMid: 'bg-throne-glow'   }
+const BRIDGE_T = { tileset: 'tile-metal', bgFar: 'bg-bridge-deck',   bgMid: 'bg-bridge-glow'   }
 const W = { small: 1200, medium: 1600, large: 2000 }
 
 // ─── Tutorial Room ────────────────────────────────────────────────────────────
 export const TUTORIAL_ROOM: RoomConfig = {
-  name: 'Docking Bay', ...T1, worldWidth: W.medium,
+  name: 'Docking Bay', ...BREACH, worldWidth: W.medium,
   exits: ['right'],
   isTutorial: true,
   platforms: [
@@ -67,7 +73,7 @@ export const TUTORIAL_ROOM: RoomConfig = {
 
 // ─── Throne Room ──────────────────────────────────────────────────────────────
 export const THRONE_ROOM: RoomConfig = {
-  name: 'The Throne', ...T1, worldWidth: W.medium,
+  name: 'The Throne', ...THRONE_T, worldWidth: W.medium,
   exits: ['left'],
   isThrone: true,
   platforms: [
@@ -89,7 +95,7 @@ export const THRONE_ROOM: RoomConfig = {
 const POOL: RoomConfig[] = [
   // A — wide corridor, left+right exits
   {
-    name: 'Reactor Corridor', ...T1, worldWidth: W.medium,
+    name: 'Reactor Corridor', ...REACTOR, worldWidth: W.medium,
     exits: ['left', 'right'],
     platforms: [
       { x: 280,  y: 560, w: 180, h: 16 }, { x: 540,  y: 480, w: 160, h: 16 },
@@ -111,7 +117,7 @@ const POOL: RoomConfig[] = [
 
   // B — staircase up-right, exits right+top
   {
-    name: 'Cargo Stairs', ...T1, worldWidth: W.medium,
+    name: 'Cargo Stairs', ...COMMAND, worldWidth: W.medium,
     exits: ['left', 'right', 'top'],
     platforms: [
       { x: 240,  y: 600, w: 200, h: 16 }, { x: 500,  y: 520, w: 200, h: 16 },
@@ -133,7 +139,7 @@ const POOL: RoomConfig[] = [
 
   // C — bottom drop, exits left+bottom
   {
-    name: 'Maintenance Shaft', ...T1, worldWidth: W.small,
+    name: 'Maintenance Shaft', ...COOLANT, worldWidth: W.small,
     exits: ['right', 'bottom'],
     platforms: [
       { x: 200,  y: 560, w: 160, h: 16 }, { x: 450,  y: 460, w: 160, h: 16 },
@@ -153,7 +159,7 @@ const POOL: RoomConfig[] = [
 
   // D — crossroads, all 4 exits
   {
-    name: 'Junction Chamber', ...T1, worldWidth: W.medium,
+    name: 'Junction Chamber', ...REACTOR, worldWidth: W.medium,
     exits: ['left', 'right', 'top', 'bottom'],
     platforms: [
       { x: 400,  y: 500, w: 160, h: 16 }, { x: 800,  y: 380, w: 160, h: 16 },
@@ -175,7 +181,7 @@ const POOL: RoomConfig[] = [
 
   // E — breakable room, no enemies
   {
-    name: 'Storage Bay', ...T1, worldWidth: W.small,
+    name: 'Storage Bay', ...COMMAND, worldWidth: W.small,
     exits: ['left', 'right'],
     platforms: [
       { x: 300, y: 560, w: 200, h: 16 }, { x: 600, y: 460, w: 200, h: 16 },
@@ -197,7 +203,7 @@ const POOL: RoomConfig[] = [
 
   // F — vertical climb, top+right
   {
-    name: 'Coolant Tower', ...T1, worldWidth: W.small,
+    name: 'Coolant Tower', ...COOLANT, worldWidth: W.small,
     exits: ['right', 'top'],
     platforms: [
       { x: 200, y: 580, w: 180, h: 16 }, { x: 500, y: 490, w: 160, h: 16 },
@@ -219,7 +225,7 @@ const POOL: RoomConfig[] = [
 
   // G — wide room, drop platforms, left+right+bottom
   {
-    name: 'Hangar Deck', ...T1, worldWidth: W.large,
+    name: 'Hangar Deck', ...BREACH, worldWidth: W.large,
     exits: ['left', 'right', 'bottom'],
     platforms: [
       { x: 350,  y: 500, w: 200, h: 16 }, { x: 700,  y: 580, w: 200, h: 16 },
@@ -244,7 +250,7 @@ const POOL: RoomConfig[] = [
 
   // H — no enemies, loot room
   {
-    name: 'Supply Cache', ...T1, worldWidth: W.small,
+    name: 'Supply Cache', ...COMMAND, worldWidth: W.small,
     exits: ['left', 'right'],
     platforms: [
       { x: 300, y: 540, w: 200, h: 16 }, { x: 600, y: 440, w: 200, h: 16 },
@@ -267,7 +273,7 @@ const POOL: RoomConfig[] = [
 
   // I — gauntlet, heavy enemies
   {
-    name: 'Security Wing', ...T1, worldWidth: W.medium,
+    name: 'Security Wing', ...COMMAND, worldWidth: W.medium,
     exits: ['left', 'right'],
     platforms: [
       { x: 300,  y: 560, w: 160, h: 16 }, { x: 540,  y: 480, w: 140, h: 16 },
@@ -292,7 +298,7 @@ const POOL: RoomConfig[] = [
 
   // J — mixed combat, left+right
   {
-    name: 'Engine Room', ...T1, worldWidth: W.large,
+    name: 'Engine Room', ...REACTOR, worldWidth: W.large,
     exits: ['left', 'right'],
     platforms: [
       { x: 400,  y: 540, w: 200, h: 16 }, { x: 800,  y: 460, w: 200, h: 16 },
@@ -317,7 +323,7 @@ const POOL: RoomConfig[] = [
 
   // K — top+right, platform gaps
   {
-    name: 'Observation Deck', ...T1, worldWidth: W.medium,
+    name: 'Observation Deck', ...BREACH, worldWidth: W.medium,
     exits: ['right', 'top'],
     platforms: [
       { x: 240,  y: 580, w: 180, h: 16 }, { x: 520,  y: 500, w: 160, h: 16 },
@@ -339,7 +345,7 @@ const POOL: RoomConfig[] = [
 
   // L — complex, left+right+top
   {
-    name: 'Command Level', ...T1, worldWidth: W.medium,
+    name: 'Command Level', ...COMMAND, worldWidth: W.medium,
     exits: ['left', 'right', 'top'],
     platforms: [
       { x: 280,  y: 580, w: 180, h: 16 }, { x: 560,  y: 500, w: 160, h: 16 },
@@ -362,7 +368,7 @@ const POOL: RoomConfig[] = [
 
   // M — ice+bomb heavy, left+right
   {
-    name: 'Cryo Bay', ...T1, worldWidth: W.small,
+    name: 'Cryo Bay', ...COOLANT, worldWidth: W.small,
     exits: ['left', 'right'],
     platforms: [
       { x: 250, y: 560, w: 160, h: 16 }, { x: 500, y: 460, w: 160, h: 16 },
@@ -385,7 +391,7 @@ const POOL: RoomConfig[] = [
 
   // O — fire gauntlet, left+top
   {
-    name: 'Furnace Block', ...T1, worldWidth: W.small,
+    name: 'Furnace Block', ...REACTOR, worldWidth: W.small,
     exits: ['left', 'top'],
     platforms: [
       { x: 200, y: 560, w: 160, h: 16 }, { x: 450, y: 460, w: 160, h: 16 },
@@ -406,7 +412,7 @@ const POOL: RoomConfig[] = [
 
   // Q — catwalk: narrow elevated passage, exits near top of walls
   {
-    name: 'Catwalk', ...T1, worldWidth: W.medium,
+    name: 'Catwalk', ...BREACH, worldWidth: W.medium,
     exits: ['left', 'right'],
     exitPositions: { left: 360, right: 360 },
     platforms: [
@@ -434,7 +440,7 @@ const POOL: RoomConfig[] = [
 
   // R — sloped hall: diagonal floor from low-left to high-right
   {
-    name: 'Sloped Hall', ...T1, worldWidth: W.medium,
+    name: 'Sloped Hall', ...REACTOR, worldWidth: W.medium,
     exits: ['left', 'right'],
     exitPositions: { left: 660, right: 200 },
     platforms: [],
@@ -460,7 +466,7 @@ const POOL: RoomConfig[] = [
 
   // T — barrier gauntlet: narrow barriers force jumps across the room
   {
-    name: 'Barrier Run', ...T1, worldWidth: W.medium,
+    name: 'Barrier Run', ...COMMAND, worldWidth: W.medium,
     exits: ['left', 'right'],
     platforms: [
       // Low barriers — jump over them
@@ -491,7 +497,7 @@ const POOL: RoomConfig[] = [
 
   // U — diagonal ceiling: slope descends from left-high to right-low, forcing crouch/jump
   {
-    name: 'Wedge Corridor', ...T1, worldWidth: W.medium,
+    name: 'Wedge Corridor', ...REACTOR, worldWidth: W.medium,
     exits: ['left', 'right'],
     platforms: [
       // Wide ledge on right side — platform above the sloped ceiling level
@@ -519,7 +525,7 @@ const POOL: RoomConfig[] = [
 
   // S — offset shaft: top and bottom exits both on left side
   {
-    name: 'Drop Shaft', ...T1, worldWidth: W.medium,
+    name: 'Drop Shaft', ...NAVBAY, worldWidth: W.medium,
     exits: ['top', 'bottom'],
     exitPositions: { top: 240, bottom: 240 },
     platforms: [
@@ -553,7 +559,7 @@ const POOL: RoomConfig[] = [
 
   // P — wide open combat
   {
-    name: 'Parade Deck', ...T1, worldWidth: W.large,
+    name: 'Parade Deck', ...BREACH, worldWidth: W.large,
     exits: ['left', 'right'],
     platforms: [
       { x: 500,  y: 500, w: 240, h: 16 }, { x: 1000, y: 420, w: 240, h: 16 },
@@ -579,7 +585,7 @@ const POOL: RoomConfig[] = [
 
 // ─── Boss Room (only reachable through Throne Room door) ─────────────────────
 export const BOSS_ROOM: RoomConfig = {
-  name: 'The Bridge', ...T1, worldWidth: W.medium,
+  name: 'The Bridge', ...BRIDGE_T, worldWidth: W.medium,
   exits: ['left'],
   isBossRoom: true,
   bossHp: 10,
