@@ -17,6 +17,9 @@ export class TouchControls {
   private abilityJust  = false
   private rapierJust   = false
 
+  private _enabled = true
+  private _allObjects: (Phaser.GameObjects.Arc | Phaser.GameObjects.Text)[] = []
+
   constructor(private scene: Phaser.Scene) {
     this.base = scene.add.circle(0, 0, STICK_RADIUS, 0xffffff, 0.12)
       .setScrollFactor(0).setDepth(50).setVisible(false)
@@ -25,6 +28,21 @@ export class TouchControls {
 
     this.buildButtons()
     this.bindJoystick()
+  }
+
+  setEnabled(v: boolean) {
+    this._enabled = v
+    for (const o of this._allObjects) o.setVisible(v)
+    if (!v) {
+      this.axisX = 0
+      this.jumpHeld = false
+      this.inhaleHeld = false
+      this.abilityJust = false
+      this.rapierJust = false
+      this.stickPointerId = null
+      this.base.setVisible(false)
+      this.thumb.setVisible(false)
+    }
   }
 
   private buildButtons() {
@@ -44,8 +62,9 @@ export class TouchControls {
   ) {
     const circle = this.scene.add.circle(x, y, 28, color, 0.7)
       .setScrollFactor(0).setDepth(50).setInteractive()
-    this.scene.add.text(x, y, label, { fontSize: '16px', color: '#000', fontStyle: 'bold' })
+    const lbl = this.scene.add.text(x, y, label, { fontSize: '16px', color: '#000', fontStyle: 'bold' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(51)
+    this._allObjects.push(circle, lbl)
 
     circle.on('pointerdown', onDown)
     if (onUp) { circle.on('pointerup', onUp); circle.on('pointerout', onUp) }
@@ -55,6 +74,7 @@ export class TouchControls {
     const leftEdge = this.scene.scale.width * 0.5
 
     this.scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!this._enabled) return
       if (p.x < leftEdge && this.stickPointerId === null) {
         this.stickPointerId = p.id
         this.stickOrigin.set(p.x, p.y)
@@ -87,7 +107,7 @@ export class TouchControls {
   }
 
   apply(player: Player) {
-    if (!player.isAlive || player.isInhaled) return
+    if (!this._enabled || !player.isAlive || player.isInhaled) return
 
     if (this.axisX < -DEAD_ZONE) player.moveLeft()
     else if (this.axisX > DEAD_ZONE) player.moveRight()

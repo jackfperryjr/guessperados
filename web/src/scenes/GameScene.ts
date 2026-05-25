@@ -72,6 +72,7 @@ export class GameScene extends Phaser.Scene {
   private touchControls: TouchControls | null = null
   private pauseContainer!: Phaser.GameObjects.Container
   private score = 0
+  private _lastPadConnected = false
 
   private nm: NetworkManager | null = null
   private localPlayerId = 0
@@ -95,6 +96,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseItems = []
     this.pauseFocusIdx = 0
     this.pauseCursor = null
+    this._lastPadConnected = false
   }
 
   create() {
@@ -1517,5 +1519,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.ui.update(this.players)
+
+    // Hide/show touch controls when a gamepad is connected or disconnected
+    if (this.touchControls) {
+      const padConnected = this.input.gamepad?.gamepads.some(p => p?.connected) ?? false
+      if (padConnected !== this._lastPadConnected) {
+        this._lastPadConnected = padConnected
+        this.touchControls.setEnabled(!padConnected)
+      }
+    }
   }
 }
