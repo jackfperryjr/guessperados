@@ -7,6 +7,8 @@ export class VictoryScene extends Phaser.Scene {
   private gpCursor!: Phaser.GameObjects.Text
   private menuItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private focusIdx = 0
+  private _navStickHeld = false
+  private _prevBtns: boolean[] = []
 
   constructor() { super({ key: 'VictoryScene' }) }
 
@@ -26,15 +28,35 @@ export class VictoryScene extends Phaser.Scene {
 
     SoundManager.startVictoryMusic()
     this.events.once('shutdown', () => SoundManager.stopVictoryMusic())
+  }
 
-    this.input.gamepad?.on(
-      Phaser.Input.Gamepad.Events.BUTTON_DOWN,
-      (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
-        if (button.index === 12) this.moveFocus(-1)
-        if (button.index === 13) this.moveFocus(1)
-        if (button.index === 0 || button.index === 9) this.menuItems[this.focusIdx]?.action()
-      },
-    )
+  update() {
+    const pad = this.input.gamepad?.getPad(0)
+    if (!pad?.connected) return
+
+    // Manual just-pressed: compare current vs previous frame
+    const just = (i: number) => {
+      const cur = pad.buttons[i]?.pressed ?? false
+      const was = this._prevBtns[i] ?? false
+      this._prevBtns[i] = cur
+      return cur && !was
+    }
+
+    // D-pad: 12=up, 13=down, 14=left, 15=right
+    if (just(12) || just(14)) this.moveFocus(-1)
+    if (just(13) || just(15)) this.moveFocus(1)
+
+    // Left stick vertical — fallback for D-pad-as-axes on some platforms
+    const ly = pad.leftStick.y
+    if (!this._navStickHeld) {
+      if (ly < -0.5)     { this._navStickHeld = true; this.moveFocus(-1) }
+      else if (ly > 0.5) { this._navStickHeld = true; this.moveFocus(1) }
+    } else if (Math.abs(ly) < 0.25) {
+      this._navStickHeld = false
+    }
+
+    // Confirm: Cross (button 0) or Options/Start (button 9)
+    if (just(0) || just(9)) this.menuItems[this.focusIdx]?.action()
   }
 
   private moveFocus(dir: number) {
