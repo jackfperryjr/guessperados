@@ -1443,12 +1443,13 @@ export class GameScene extends Phaser.Scene {
         if (ri) this.handleRemoteInput(p, ri)
       } else {
         const pad = this.input.gamepad?.getPad(this.nm ? 0 : p.playerId)
-        if (pad?.connected) this.handleGamepad(p, pad)
-        else {
+        if (pad?.connected) {
+          this.handleGamepad(p, pad)
+        } else {
           const keys = this.playerKeysets.get(p.playerId)
           if (keys) this.handleKeyboard(p, keys)
+          if (this.touchControls) this.touchControls.apply(p)
         }
-        if (this.touchControls) this.touchControls.apply(p)
 
         if (this.nm) {
           const pad2 = this.input.gamepad?.getPad(0)
