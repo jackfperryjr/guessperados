@@ -18,7 +18,7 @@ Play locally by yourself. Or create a room on the server for up to 4 players. Us
 
 ## Go play
 
-**[friendsslaythedragon.up.railway.app](https://friendsslaythedragon.up.railway.app)**
+**[Friends Slay the Dragon!](https://jackfperryjr.github.io/friends/)**
 
 No download. No install. Just vibes and dragon-slaying.
 
