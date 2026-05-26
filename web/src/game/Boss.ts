@@ -37,8 +37,8 @@ export class Boss extends Enemy {
       this.setTexture('sheet-dragon', 0)
       this.setScale(3.45)
       body.setAllowGravity(false)
-      body.setSize(110, 90)
-      body.setOffset((this.displayWidth - 110) / 2, Math.round(this.displayHeight * 0.27))
+      body.setSize(110, 80)
+      body.setOffset((this.displayWidth - 110) / 2, 20)
       this.bossFlying = true
       if (scene.anims.exists('sheet-dragon-walk')) this.play('sheet-dragon-walk')
     } else {

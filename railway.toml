@@ -1,5 +1,2 @@
 [build]
 builder = "nixpacks"
-
-[deploy]
-startCommand = "node server/index.js"
