@@ -58,7 +58,7 @@ export class IntroScene extends Phaser.Scene {
       ? this.add.image(cx, cy + 4, 'intro-jack').setDisplaySize(110, 110).setAlpha(0)
       : null
 
-    const nameText = this.add.text(cx, cy + 72, 'JACK', {
+    const nameText = this.add.text(cx, cy + 92, 'JACK', {
       fontSize: '18px', fontFamily: FONT, color: '#ffe066',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
@@ -69,7 +69,7 @@ export class IntroScene extends Phaser.Scene {
     this.animSlide(startAt, objs, [lineL, lineR], nameText)
   }
 
-  // ── slide 2: inspired by his kids ────────────────────────────────────────────
+  // ── slide 2: inspired by the boys ────────────────────────────────────────────
 
   private scheduleInspiredBy(startAt: number) {
     const { width, height } = this.scale
@@ -77,14 +77,14 @@ export class IntroScene extends Phaser.Scene {
 
     const label = this.label(cx, cy - 80, 'INSPIRED BY')
 
-    const nameText = this.add.text(cx, cy - 30, 'HIS KIDS', {
+    const nameText = this.add.text(cx, cy + 120, 'THE BOYS', {
       fontSize: '22px', fontFamily: FONT, color: '#ff80ab',
       stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
 
     const imgSize = 88
     const spacing = 108
-    const imgsY   = cy + 44
+    const imgsY   = cy + 14
     const kidObjs: Phaser.GameObjects.Image[] = []
     for (const [key, x] of [
       ['intro-carter', cx - spacing],

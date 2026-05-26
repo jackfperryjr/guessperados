@@ -36,6 +36,7 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
   takeDamage(amount: number, type: DamageType) {
     const resistance = this.resistances[type] ?? 0
     this.health -= amount * (1 - resistance)
+    this.emit('hit')
 
     this.setTint(0xff6666)
     this.scene.time.delayedCall(120, () => {

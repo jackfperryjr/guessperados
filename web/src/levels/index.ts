@@ -8,6 +8,7 @@ export interface EnemySpawn  { x: number; y: number; ability: AbilityType }
 export interface DestructibleSpawn {
   x: number; y: number; w: number; h: number; health: number
   resistances?: Partial<Record<DamageType, number>>; ability: AbilityType
+  furnitureType?: 'bookcase' | 'table' | 'chest'
 }
 export interface CrateSpawn  { x: number; y: number }
 
@@ -16,6 +17,13 @@ export interface ItemSpawn {
   x: number; y: number
   type: ItemType
   ability?: AbilityType
+}
+
+export interface FurnitureSpawn {
+  type: 'bookcase' | 'table' | 'chest'
+  x: number
+  ability?: AbilityType
+  scanFromY?: number  // world Y to start scanning downward; defaults to 0
 }
 
 export interface RoomConfig {
@@ -40,6 +48,7 @@ export interface RoomConfig {
   slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
   destructibles: DestructibleSpawn[]
+  furnitureSpawns?: FurnitureSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
 }
@@ -90,6 +99,105 @@ const WORLD_ROOM: RoomConfig = {
     { x: 4500, y: 420, ability: AbilityType.Ice      },
   ],
   destructibles: [],
+  furnitureSpawns: [
+    // Dense coverage across x≈1640–5280, one item every ~40 px, scanFromY=580
+    // ── Bookcases (every 120 px, ability every ~600 px) ──
+    { type: 'bookcase', x: 1640, scanFromY: 580 },
+    { type: 'bookcase', x: 1760, scanFromY: 580 },
+    { type: 'bookcase', x: 1880, scanFromY: 580 },
+    { type: 'bookcase', x: 2000, scanFromY: 580 },
+    { type: 'bookcase', x: 2120, scanFromY: 580 },
+    { type: 'bookcase', x: 2240, scanFromY: 580, ability: AbilityType.Fire     },
+    { type: 'bookcase', x: 2360, scanFromY: 580 },
+    { type: 'bookcase', x: 2480, scanFromY: 580 },
+    { type: 'bookcase', x: 2600, scanFromY: 580 },
+    { type: 'bookcase', x: 2720, scanFromY: 580 },
+    { type: 'bookcase', x: 2840, scanFromY: 580, ability: AbilityType.Fire     },
+    { type: 'bookcase', x: 2960, scanFromY: 580 },
+    { type: 'bookcase', x: 3080, scanFromY: 580 },
+    { type: 'bookcase', x: 3200, scanFromY: 580 },
+    { type: 'bookcase', x: 3320, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 3440, scanFromY: 580 },
+    { type: 'bookcase', x: 3560, scanFromY: 580 },
+    { type: 'bookcase', x: 3680, scanFromY: 580 },
+    { type: 'bookcase', x: 3800, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 3920, scanFromY: 580 },
+    { type: 'bookcase', x: 4040, scanFromY: 580 },
+    { type: 'bookcase', x: 4160, scanFromY: 580 },
+    { type: 'bookcase', x: 4280, scanFromY: 580, ability: AbilityType.Ice      },
+    { type: 'bookcase', x: 4400, scanFromY: 580 },
+    { type: 'bookcase', x: 4520, scanFromY: 580 },
+    { type: 'bookcase', x: 4640, scanFromY: 580 },
+    { type: 'bookcase', x: 4760, scanFromY: 580, ability: AbilityType.Ice      },
+    { type: 'bookcase', x: 4880, scanFromY: 580 },
+    { type: 'bookcase', x: 5000, scanFromY: 580 },
+    { type: 'bookcase', x: 5120, scanFromY: 580 },
+    { type: 'bookcase', x: 5240, scanFromY: 580 },
+    // ── Tables (every 120 px, offset +40 from bookcases) ──
+    { type: 'table', x: 1680, scanFromY: 580 },
+    { type: 'table', x: 1800, scanFromY: 580 },
+    { type: 'table', x: 1920, scanFromY: 580 },
+    { type: 'table', x: 2040, scanFromY: 580 },
+    { type: 'table', x: 2160, scanFromY: 580 },
+    { type: 'table', x: 2280, scanFromY: 580 },
+    { type: 'table', x: 2400, scanFromY: 580 },
+    { type: 'table', x: 2520, scanFromY: 580 },
+    { type: 'table', x: 2640, scanFromY: 580 },
+    { type: 'table', x: 2760, scanFromY: 580 },
+    { type: 'table', x: 2880, scanFromY: 580 },
+    { type: 'table', x: 3000, scanFromY: 580 },
+    { type: 'table', x: 3120, scanFromY: 580 },
+    { type: 'table', x: 3240, scanFromY: 580 },
+    { type: 'table', x: 3360, scanFromY: 580 },
+    { type: 'table', x: 3480, scanFromY: 580 },
+    { type: 'table', x: 3600, scanFromY: 580 },
+    { type: 'table', x: 3720, scanFromY: 580 },
+    { type: 'table', x: 3840, scanFromY: 580 },
+    { type: 'table', x: 3960, scanFromY: 580 },
+    { type: 'table', x: 4080, scanFromY: 580 },
+    { type: 'table', x: 4200, scanFromY: 580 },
+    { type: 'table', x: 4320, scanFromY: 580 },
+    { type: 'table', x: 4440, scanFromY: 580 },
+    { type: 'table', x: 4560, scanFromY: 580 },
+    { type: 'table', x: 4680, scanFromY: 580 },
+    { type: 'table', x: 4800, scanFromY: 580 },
+    { type: 'table', x: 4920, scanFromY: 580 },
+    { type: 'table', x: 5040, scanFromY: 580 },
+    { type: 'table', x: 5160, scanFromY: 580 },
+    { type: 'table', x: 5280, scanFromY: 580 },
+    // ── Chests (every 120 px, offset +80 from bookcases, with scattered abilities) ──
+    { type: 'chest', x: 1720, scanFromY: 580 },
+    { type: 'chest', x: 1840, scanFromY: 580, ability: AbilityType.Fire     },
+    { type: 'chest', x: 1960, scanFromY: 580 },
+    { type: 'chest', x: 2080, scanFromY: 580 },
+    { type: 'chest', x: 2200, scanFromY: 580, ability: AbilityType.Fire     },
+    { type: 'chest', x: 2320, scanFromY: 580 },
+    { type: 'chest', x: 2440, scanFromY: 580 },
+    { type: 'chest', x: 2560, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 2680, scanFromY: 580 },
+    { type: 'chest', x: 2800, scanFromY: 580 },
+    { type: 'chest', x: 2920, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 3040, scanFromY: 580 },
+    { type: 'chest', x: 3160, scanFromY: 580 },
+    { type: 'chest', x: 3280, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 3400, scanFromY: 580 },
+    { type: 'chest', x: 3520, scanFromY: 580 },
+    { type: 'chest', x: 3640, scanFromY: 580, ability: AbilityType.Ice      },
+    { type: 'chest', x: 3760, scanFromY: 580 },
+    { type: 'chest', x: 3880, scanFromY: 580 },
+    { type: 'chest', x: 4000, scanFromY: 580, ability: AbilityType.Ice      },
+    { type: 'chest', x: 4120, scanFromY: 580 },
+    { type: 'chest', x: 4240, scanFromY: 580 },
+    { type: 'chest', x: 4360, scanFromY: 580, ability: AbilityType.Ice      },
+    { type: 'chest', x: 4480, scanFromY: 580 },
+    { type: 'chest', x: 4600, scanFromY: 580 },
+    { type: 'chest', x: 4720, scanFromY: 580, ability: AbilityType.Fire     },
+    { type: 'chest', x: 4840, scanFromY: 580 },
+    { type: 'chest', x: 4960, scanFromY: 580 },
+    { type: 'chest', x: 5080, scanFromY: 580 },
+    { type: 'chest', x: 5200, scanFromY: 580 },
+    { type: 'chest', x: 5320, scanFromY: 580 },
+  ],
   crates: [
     { x: 1800, y: 580 }, { x: 2500, y: 580 },
     { x: 3300, y: 580 }, { x: 4100, y: 580 },
@@ -125,6 +233,15 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   ],
   enemies: [],
   destructibles: [],
+  furnitureSpawns: [
+    // Floor surface at y=1312 (row 41). Scan from y=1280 (open air just above it).
+    { type: 'bookcase', x: 200,  scanFromY: 1280 },
+    { type: 'bookcase', x: 1400, scanFromY: 1280 },
+    { type: 'table',    x: 350,  scanFromY: 1280 },
+    { type: 'table',    x: 1250, scanFromY: 1280 },
+    { type: 'chest',    x: 500,  scanFromY: 1280, ability: AbilityType.Fire },
+    { type: 'chest',    x: 1100, scanFromY: 1280, ability: AbilityType.Ice  },
+  ],
   crates: [],
   items: [
     { x: 400,  y: 1260, type: 'heart' },
