@@ -5,7 +5,12 @@ const FONT = '"Press Start 2P", monospace'
 const PLAYER_COLORS    = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
 const PLAYER_COLOR_STR = ['#ffe066', '#00ccff', '#44ff88', '#ff8c00']
 
-type CharInfo = { key: string; name: string; sheetKey: string; animPrefix: string }
+type CharInfo = { key: string; name: string; sheetKey: string; animPrefix: string; previewFrame: number }
+
+// 7 characters fit in two rows: 4 top, 3 bottom (centered)
+const CARD_W  = 148
+const CARD_H  = 190
+const GAP     = 16
 
 export class CharacterSelectScene extends Phaser.Scene {
   private chars: CharInfo[] = []
@@ -32,44 +37,54 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.add.rectangle(width / 2, height / 2, width, height, 0x080818)
     this.add.rectangle(width / 2, height / 2, width, height, 0x0a0030, 0.45)
 
-    this.add.text(width / 2, 52, 'CHOOSE YOUR CHARACTER', {
-      fontSize: '18px', fontFamily: FONT, color: '#ffe066',
+    this.add.text(width / 2, 44, 'CHOOSE YOUR CHARACTER', {
+      fontSize: '16px', fontFamily: FONT, color: '#ffe066',
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5)
 
-    // Cards — centered row
-    const cardW  = 160
-    const cardH  = 210
-    const gap    = 24
-    const totalW = this.chars.length * cardW + (this.chars.length - 1) * gap
-    const startX = (width - totalW) / 2 + cardW / 2
-    const cardY  = Math.round(height * 0.48)
-
+    // Layout: row0 = first 4 chars, row1 = remaining chars (centered)
     this.cards = []
-    for (let i = 0; i < this.chars.length; i++) {
-      const cx   = Math.round(startX + i * (cardW + gap))
-      this.cards.push({ x: cx, y: cardY })
+    const rowSplit  = 4
+    const row0Count = Math.min(this.chars.length, rowSplit)
+    const row1Count = Math.max(0, this.chars.length - rowSplit)
+    const row0Y = Math.round(height * 0.38)
+    const row1Y = Math.round(height * 0.38) + CARD_H + GAP + 10
 
-      this.add.rectangle(cx, cardY, cardW, cardH, 0x111128).setStrokeStyle(1, 0x223355)
+    const buildRow = (startIdx: number, count: number, rowY: number) => {
+      const rowW = count * CARD_W + (count - 1) * GAP
+      const rowX = (width - rowW) / 2 + CARD_W / 2
+      for (let i = 0; i < count; i++) {
+        const ci = startIdx + i
+        const cx = Math.round(rowX + i * (CARD_W + GAP))
+        this.cards[ci] = { x: cx, y: rowY }
+        this.buildCard(cx, rowY, this.chars[ci])
 
-      const char = this.chars[i]
-      if (this.textures.exists(char.sheetKey)) {
-        this.add.sprite(cx, cardY - 30, char.sheetKey, 14).setScale(2.5)
-      } else {
-        this.add.rectangle(cx, cardY - 30, 64, 64, 0x334466)
+        // Touch / click — tap once to select, tap again to confirm
+        const zone = this.add.zone(cx, rowY, CARD_W, CARD_H).setInteractive().setDepth(8)
+        zone.on('pointerdown', () => {
+          if (this.started) return
+          // Route to first unconfirmed player
+          const p = this.confirmed.indexOf(false)
+          if (p < 0) return
+          if (this.selections[p] === ci) {
+            this.confirm(p)
+          } else {
+            this.selections[p] = ci
+            this.updateCursorPos(p)
+          }
+        })
       }
-
-      this.add.text(cx, cardY + 75, char.name, {
-        fontSize: '9px', fontFamily: FONT, color: '#aaccdd',
-      }).setOrigin(0.5)
     }
+
+    buildRow(0,         row0Count, row0Y)
+    if (row1Count > 0) buildRow(row0Count, row1Count, row1Y)
 
     // Per-player cursors, labels, confirm marks
     this.cursors      = []
     this.confirmMarks = []
     this.playerLabels = []
     for (let p = 0; p < this.playerCount; p++) {
-      const cursor = this.add.rectangle(0, 0, cardW + 10, cardH + 10, 0, 0)
+      const cursor = this.add.rectangle(0, 0, CARD_W + 10, CARD_H + 10, 0, 0)
         .setStrokeStyle(3, PLAYER_COLORS[p])
         .setDepth(5)
       this.cursors.push(cursor)
@@ -81,7 +96,7 @@ export class CharacterSelectScene extends Phaser.Scene {
       this.playerLabels.push(label)
 
       const mark = this.add.text(0, 0, '✓', {
-        fontSize: '14px', fontFamily: FONT, color: PLAYER_COLOR_STR[p],
+        fontSize: '13px', fontFamily: FONT, color: PLAYER_COLOR_STR[p],
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setDepth(7).setVisible(false)
       this.confirmMarks.push(mark)
@@ -90,15 +105,21 @@ export class CharacterSelectScene extends Phaser.Scene {
     }
 
     // Status text
-    this.startText = this.add.text(width / 2, height - 58, '', {
-      fontSize: '11px', fontFamily: FONT, color: '#556677',
+    this.startText = this.add.text(width / 2, height - 72, '', {
+      fontSize: '10px', fontFamily: FONT, color: '#556677',
       stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5)
     this.updateStartText()
 
-    this.add.text(width / 2, height - 26, 'P1: A/D  W=CONFIRM    P2: ←/→  ↑=CONFIRM    GAMEPAD: D-PAD  A=CONFIRM', {
-      fontSize: '7px', fontFamily: FONT, color: '#334455',
-    }).setOrigin(0.5)
+    // On-screen PLAY button (works for touch, mouse, and keyboard users)
+    const playBtn = this.add.text(width / 2, height - 38, '▶  PLAY', {
+      fontSize: '11px', fontFamily: FONT,
+      color: '#000000', backgroundColor: '#ffe066',
+      padding: { x: 28, y: 10 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(10)
+    playBtn.on('pointerdown', () => this.tryStart())
+    playBtn.on('pointerover', () => playBtn.setStyle({ backgroundColor: '#ffcc00' }))
+    playBtn.on('pointerout',  () => playBtn.setStyle({ backgroundColor: '#ffe066' }))
 
     // Keyboard input
     const kb = this.input.keyboard!
@@ -113,7 +134,7 @@ export class CharacterSelectScene extends Phaser.Scene {
       kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down',    () => this.confirm(1))
     }
 
-    // Gamepad input — pad index maps to player index
+    // Gamepad input
     this.input.gamepad?.on(
       Phaser.Input.Gamepad.Events.BUTTON_DOWN,
       (pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
@@ -121,12 +142,26 @@ export class CharacterSelectScene extends Phaser.Scene {
         const padIdx = activePads.indexOf(pad)
         if (padIdx < 0) return
         const p = Math.min(padIdx, this.playerCount - 1)
-        if (button.index === 14) this.move(p, -1)   // d-pad left
-        if (button.index === 15) this.move(p,  1)   // d-pad right
-        if (button.index === 0)  this.confirm(p)    // A / Cross
-        if (button.index === 9)  this.tryStart()    // Start
+        if (button.index === 14) this.move(p, -1)
+        if (button.index === 15) this.move(p,  1)
+        if (button.index === 0)  this.confirm(p)
+        if (button.index === 9)  this.tryStart()
       },
     )
+  }
+
+  private buildCard(cx: number, cy: number, char: CharInfo) {
+    this.add.rectangle(cx, cy, CARD_W, CARD_H, 0x111128).setStrokeStyle(1, 0x223355)
+
+    if (this.textures.exists(char.sheetKey)) {
+      this.add.image(cx, cy - 18, char.sheetKey, char.previewFrame).setScale(2.5).setDepth(2)
+    } else {
+      this.add.rectangle(cx, cy - 18, 64, 64, 0x334466).setDepth(2)
+    }
+
+    this.add.text(cx, cy + 75, char.name, {
+      fontSize: '8px', fontFamily: FONT, color: '#aaccdd',
+    }).setOrigin(0.5).setDepth(2)
   }
 
   private move(player: number, dir: number) {
@@ -137,7 +172,6 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private confirm(player: number) {
     if (this.confirmed[player]) {
-      // Allow un-confirming to change selection
       this.confirmed[player] = false
       this.confirmMarks[player].setVisible(false)
       this.updateStartText()
@@ -154,8 +188,8 @@ export class CharacterSelectScene extends Phaser.Scene {
     const card = this.cards[this.selections[player]]
     if (!card) return
     this.cursors[player].setPosition(card.x, card.y)
-    this.playerLabels[player].setPosition(card.x, card.y - 110)
-    this.confirmMarks[player].setPosition(card.x + 68, card.y - 97)
+    this.playerLabels[player].setPosition(card.x, card.y - CARD_H / 2 - 4)
+    this.confirmMarks[player].setPosition(card.x + CARD_W / 2 - 8, card.y - CARD_H / 2 + 8)
   }
 
   private updateStartText() {

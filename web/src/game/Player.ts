@@ -8,7 +8,7 @@ const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
 const INHALE_RANGE      = 190
 const KILL_RANGE        = 60
-const PLAYER_CARRY_MS   = 1000
+const PLAYER_CARRY_MS   = 2000
 const SPIT_VX           = 540
 const SPIT_VY           = -320
 
@@ -30,10 +30,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   speedMultiplier  = 1.0
   controlsReversed = false
 
-  private isFloating    = false
-  private isInhaling    = false
-  private invincible    = false
-  private isMeleeing    = false
+  private isFloating      = false
+  private isInhaling      = false
+  private invincible      = false
+  private isMeleeing      = false
+  private isUsingAbility  = false
   private inhaledObject: Phaser.Physics.Arcade.Sprite | null = null
   private animPrefix: string | null = null
 
@@ -127,8 +128,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const vx = Math.abs(body.velocity.x)
 
     let anim: string
-    if (this.isMeleeing)         anim = 'melee'
-    else if (this.hasInhaled)    anim = 'puffed'
+    if (this.isMeleeing)          anim = 'melee'
+    else if (this.isUsingAbility) anim = 'ability'
+    else if (this.hasInhaled)     anim = 'puffed'
     else if (this.isInhaling)    anim = 'inhale'
     else if (this.isFloating)    anim = 'float'
     else if (!body.blocked.down && body.velocity.y > 80) anim = 'fall'
@@ -210,6 +212,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.currentAbility === AbilityType.None) return
     const ability = this.currentAbility
     this.emit('useAbility', ability, this)
+    this.isUsingAbility = true
+    this.scene.time.delayedCall(350, () => { if (this.active) this.isUsingAbility = false })
     this.abilityAmmo--
     if (this.abilityAmmo <= 0) {
       this.currentAbility = AbilityType.None

@@ -14,22 +14,94 @@ type FrameRange = { start: number; end: number }
 
 // Player sheets — key becomes texture 'sheet-{key}', anim prefix 'char-{key}'
 // New sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
-const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?: boolean; name?: string; anim?: Partial<Record<string, FrameRange>> }> = {
-  player0: { file: 'conrad.png',            fw: 64, fh: 64, selectable: true, name: 'CONRAD' },
-  player1: { file: 'carter.png',            fw: 64, fh: 64, selectable: true, name: 'CARTER' },
-  callum:  { file: 'callum.png',            fw: 64, fh: 64, selectable: true, name: 'CALLUM' },
-  coco:    { file: 'coco.png',              fw: 64, fh: 64, selectable: true, name: 'COCO' },
-  eric:    { file: 'eric.png',              fw: 64, fh: 64, selectable: true, name: 'ERIC' },
-  green:   { file: 'characters-green.png',  fw: 84, fh: 84 },
-  yellow:  { file: 'characters-yellow.png', fw: 84, fh: 84 },
+const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?: boolean; name?: string; previewFrame?: number; anim?: Partial<Record<string, FrameRange>> }> = {
+  conrad: { file: 'conrad.png',            fw: 64, fh: 64, selectable: true, name: 'CONRAD',  previewFrame: 10 },
+  carter: { file: 'carter.png',            fw: 64, fh: 64, selectable: true, name: 'CARTER',  previewFrame: 9,
+    anim: {
+        idle:   { start: 15, end: 15 },
+        walk:   { start: 0, end: 7 },
+        jump:   { start: 9, end: 9 },
+        float:  { start: 11, end: 11 },
+        inhale: { start: 12, end: 12 },
+        puffed: { start: 7, end: 7 },
+        fall:    { start: 13, end: 13 },
+        melee:   { start: 10, end: 9  },
+        ability: { start: 10, end: 9  },
+      }
+    },
+  callum:  { file: 'callum.png',            fw: 64, fh: 64, selectable: true, name: 'CALLUM',  previewFrame: 9,
+    anim: {
+        idle:   { start: 0, end: 0 },
+        walk:   { start: 1, end: 6 },
+        jump:   { start: 10, end: 10 },
+        float:  { start: 11, end: 11 },
+        inhale: { start: 9, end: 9 },
+        puffed: { start: 9, end: 9 },
+        fall:    { start: 8,  end: 8  },
+        melee:   { start: 12, end: 13 },
+        ability: { start: 12, end: 13 },
+      }
+   },
+  coco:    { file: 'coco.png',              fw: 64, fh: 64, selectable: true, name: 'COCO',    previewFrame: 15,
+    anim: {
+        idle:   { start: 8, end: 8 },
+        walk:   { start: 0, end: 6 },
+        jump:   { start: 10, end: 10 },
+        float:  { start: 12, end: 12 },
+        inhale: { start: 14, end: 14 },
+        puffed: { start: 14, end: 14 },
+        fall:    { start: 11, end: 11 },
+        melee:   { start: 13, end: 13 },
+        ability: { start: 13, end: 13 },
+      }
+    },
+  eric:    { file: 'eric.png',              fw: 64, fh: 64, selectable: true, name: 'ERIC',    previewFrame: 15,
+    anim: {
+        idle:   { start: 15, end: 15 },
+        walk:   { start: 0, end: 7 },
+        jump:   { start: 9, end: 9 },
+        float:  { start: 10, end: 10 },
+        inhale: { start: 9, end: 9 },
+        puffed: { start: 13, end: 13 },
+        fall:    { start: 12, end: 12 },
+        melee:   { start: 11, end: 11 },
+        ability: { start: 11, end: 11 },
+      }
+    },
+  abby:    { file: 'abby.png',              fw: 64, fh: 64, selectable: true, name: 'ABBY',    previewFrame: 15,
+    anim: {
+        idle:   { start: 5, end: 5 },
+        walk:   { start: 0, end: 2 },
+        jump:   { start: 9, end: 9 },
+        float:  { start: 7, end: 7 },
+        inhale: { start: 8, end: 8 },
+        puffed: { start: 8, end: 8 },
+        fall:    { start: 6,  end: 6  },
+        melee:   { start: 10, end: 10 },
+        ability: { start: 10, end: 10 },
+      }
+    },
+  scarlet: { file: 'scarlet.png',           fw: 64, fh: 64, selectable: true, name: 'SCARLET', previewFrame: 15,
+    anim: {
+        idle:   { start: 15, end: 15 },
+        walk:   { start: 1, end: 5 },
+        jump:   { start: 9, end: 9 },
+        float:  { start: 12, end: 12 },
+        inhale: { start: 8, end: 8 },
+        puffed: { start: 8, end: 8 },
+        fall:    { start: 11, end: 11 },
+        melee:   { start: 10, end: 10 },
+        ability: { start: 10, end: 10 },
+      }
+    },
 }
 
 // Which sheet each player uses (falls back to generated texture if file is missing)
 const PLAYER_SHEETS: Record<number, string> = {
-  0: 'player0',
-  1: 'player1',
-  2: 'green',
-  3: 'yellow',
+  0: 'conrad',
+  1: 'carter',
+  2: 'callum',
+  3: 'abby',
 }
 
 // 4×4 grid layout (frames 0-15, 64×64 each):
@@ -39,14 +111,15 @@ const PLAYER_SHEETS: Record<number, string> = {
 //  Row 3 (12–15)— (reserved for puffed / special)
 // Adjust start/end once you confirm the actual frame order in the sheet.
 const ANIM_FRAMES = {
-  idle:   { start: 14, end: 14 },
-  walk:   { start: 0, end: 3 },
-  jump:   { start: 4, end: 4 },
-  float:  { start: 8, end: 8 },
-  inhale: { start: 10, end: 10 },
-  puffed: { start: 7, end: 7 },
-  fall:   { start: 12, end: 12 },
-  melee:  { start: 11, end: 11 },
+  idle:    { start: 14, end: 14 },
+  walk:    { start: 0,  end: 3  },
+  jump:    { start: 7,  end: 7  },
+  float:   { start: 9,  end: 9  },
+  inhale:  { start: 10, end: 10 },
+  puffed:  { start: 10, end: 10 },
+  fall:    { start: 8,  end: 8  },
+  melee:   { start: 12, end: 11 },
+  ability: { start: 12, end: 11 },
 }
 // ── Enemy sheet config ────────────────────────────────────────────────────────
 // New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
@@ -77,6 +150,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('fire_ability',           'assets/fire_ability.png')
     this.load.image('lightning_ability',      'assets/lightning_ability.png')
     this.load.image('ice_ability',            'assets/ice_ability.png')
+    this.load.image('proj-fire',      'assets/projectiles/fireball.png')
+    this.load.image('proj-ice',       'assets/projectiles/icecycle.png')
+    this.load.image('proj-lightning', 'assets/projectiles/lightningbolt.png')
     this.load.image('logo', 'assets/friendsslaythedragon.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
@@ -110,7 +186,7 @@ export class BootScene extends Phaser.Scene {
           key:       `${prefix}-${name}`,
           frames:    this.anims.generateFrameNumbers(textureKey, range),
           frameRate: name === 'walk' ? 8 : name === 'inhale' ? 10 : 6,
-          repeat:    name === 'jump' || name === 'fall' || name === 'melee' ? 0 : -1,
+          repeat:    name === 'jump' || name === 'fall' || name === 'melee' || name === 'ability' ? 0 : -1,
         })
       }
     }
@@ -148,14 +224,15 @@ export class BootScene extends Phaser.Scene {
     return ['player', 'player-2', 'player-2', 'player-3'][playerId] ?? 'player'
   }
 
-  static getSelectableCharacters(): { key: string; name: string; sheetKey: string; animPrefix: string }[] {
+  static getSelectableCharacters(): { key: string; name: string; sheetKey: string; animPrefix: string; previewFrame: number }[] {
     return Object.entries(SHEETS)
       .filter(([, cfg]) => cfg.selectable)
       .map(([key, cfg]) => ({
         key,
-        name:       cfg.name ?? key.toUpperCase(),
-        sheetKey:   `sheet-${key}`,
-        animPrefix: `char-${key}`,
+        name:         cfg.name ?? key.toUpperCase(),
+        sheetKey:     `sheet-${key}`,
+        animPrefix:   `char-${key}`,
+        previewFrame: cfg.previewFrame ?? 0,
       }))
   }
 

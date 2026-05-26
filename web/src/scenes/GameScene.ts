@@ -893,6 +893,8 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
+    this.spawnRandomBreakables()
+
     for (const c of this.cfg.crates) {
       const crate = this.physics.add.image(c.x, c.y, 'crate')
       ;(crate.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(false)
@@ -940,6 +942,7 @@ export class GameScene extends Phaser.Scene {
 
     // Throne room door — rendered behind player (depth 1-2)
     if (this.cfg.isThrone) {
+
       this.throneX = W / 2
       const door = this.add.rectangle(W / 2, 620, 80, 120, 0x334466).setDepth(1)
       this.add.rectangle(W / 2, 620, 74, 114, 0x223355).setDepth(1)
@@ -948,6 +951,52 @@ export class GameScene extends Phaser.Scene {
       this.throneLabel = this.add.text(W / 2, 548, '↑ PRESS UP', {
         fontSize: '9px', fontFamily: FONT, color: '#aaccff',
       }).setOrigin(0.5).setDepth(11).setVisible(false)
+    }
+  }
+
+  private spawnRandomBreakables() {
+    if (this.cfg.worldMap) return
+    const W = this.cfg.worldWidth
+    const FLOOR_Y  = 672   // top surface of floor tile
+    const BLOCK    = 32
+    const abilityPool = [
+      AbilityType.None, AbilityType.None, AbilityType.None, AbilityType.None,
+      AbilityType.Fire, AbilityType.Electric, AbilityType.Ice,
+    ]
+
+    const addBlock = (x: number, y: number, ability: AbilityType) => {
+      const dest = new Destructible(this, x, y, 1, ability)
+      this.destructibles.push(dest)
+      dest.on('destroyed', (obj: Destructible) => {
+        this.destructibles = this.destructibles.filter(z => z !== obj)
+        this.addScore(SCORE_DESTRUCT)
+        if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
+      })
+    }
+
+    // Floor stacks — one group per 220px span, 150px margins at each wall
+    const section = 220
+    const numGroups = Math.floor((W - 300) / section)
+    for (let i = 0; i < numGroups; i++) {
+      const cx = 150 + i * section + Phaser.Math.Between(-30, 30)
+      const stackH = Phaser.Math.Between(1, 3)
+      const baseAbility = Phaser.Math.RND.pick(abilityPool) as AbilityType
+      for (let s = 0; s < stackH; s++) {
+        const y = FLOOR_Y - BLOCK / 2 - s * BLOCK
+        addBlock(cx, y, s === 0 ? baseAbility : AbilityType.None)
+      }
+    }
+
+    // Platform tops — 1-2 blocks per platform
+    for (const plat of this.cfg.platforms) {
+      if (Phaser.Math.Between(0, 1) === 0) continue
+      const platTop = plat.y - plat.h / 2
+      const xOff = Phaser.Math.Between(-Math.floor(plat.w / 4), Math.floor(plat.w / 4))
+      const ability = Phaser.Math.RND.pick(abilityPool) as AbilityType
+      addBlock(plat.x + xOff, platTop - BLOCK / 2, ability)
+      if (plat.w >= 128 && Phaser.Math.Between(0, 1) === 1) {
+        addBlock(plat.x + xOff + Phaser.Math.Between(40, 70), platTop - BLOCK / 2, AbilityType.None)
+      }
     }
   }
 
@@ -1080,6 +1129,10 @@ export class GameScene extends Phaser.Scene {
   private setupCollision() {
     this.players.forEach(p => this.physics.add.collider(p, this.platforms))
 
+    // Breakable blocks — players and non-flying enemies stand on them
+    this.players.forEach(p => this.destructibles.forEach(d => this.physics.add.collider(p, d)))
+    this.enemies.forEach(e => { if (!e.flying) this.destructibles.forEach(d => this.physics.add.collider(e, d)) })
+
     this.crates.forEach(c => this.physics.add.collider(c, this.platforms))
     for (let i = 0; i < this.crates.length; i++)
       for (let j = i + 1; j < this.crates.length; j++)
@@ -1155,6 +1208,7 @@ export class GameScene extends Phaser.Scene {
   // ── abilities ───────────────────────────────────────────────────────────────
 
   private doMeleeSwing(src: Player) {
+    SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
     const gfx = this.add.graphics().setDepth(12)
@@ -1188,9 +1242,12 @@ export class GameScene extends Phaser.Scene {
 
   private spawnFireball(src: Player) {
     const dir = src.flipX ? -1 : 1
-    const fb = this.physics.add.image(src.x + dir * 20, src.y, 'fireball')
+    const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
+    const fb = this.physics.add.image(src.x + dir * 20, src.y, texKey)
     this.projectiles.add(fb)
     ;(fb.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 650).setGravityY(-800)
+    fb.setFlipX(dir < 0)
+    this.tweens.add({ targets: fb, angle: fb.angle + 360, duration: 450, repeat: -1 })
 
     this.enemies.forEach(e => {
       this.physics.add.overlap(fb, e, () => { e.hit(); this.addScore(SCORE_ENEMY); fb.destroy() })
@@ -1216,10 +1273,11 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: [bolt, glow], alpha: 0, scaleY: 2, duration: 280,
       onComplete: () => { bolt.destroy(); glow.destroy() } })
 
-    // 3× wider arc and heavier damage vs fire/ice
+    // Lightning instant-kills all enemies in the arc
     this.enemies.forEach(e => {
+      if (!e.active) return
       if (dir * (e.x - src.x) > 0 && Math.abs(e.y - src.y) < 80) {
-        e.hit(); this.addScore(SCORE_ENEMY)
+        e.die(); this.addScore(SCORE_ENEMY)
       }
     })
     if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
@@ -1238,10 +1296,13 @@ export class GameScene extends Phaser.Scene {
 
   private iceBlast(src: Player) {
     const dir = src.flipX ? -1 : 1
-    const proj = this.physics.add.image(src.x + dir * 20, src.y, 'fireball')
+    const texKey = this.textures.exists('proj-ice') ? 'proj-ice' : 'fireball'
+    const proj = this.physics.add.image(src.x + dir * 20, src.y, texKey)
     this.projectiles.add(proj)
     ;(proj.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 600).setGravityY(-800)
-    proj.setTint(0x66ccff).setScale(1.15)
+    if (texKey === 'fireball') proj.setTint(0x66ccff).setScale(1.15)
+    proj.setFlipX(dir < 0)
+    this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: 600, repeat: -1 })
 
     this.enemies.forEach(e => {
       this.physics.add.overlap(proj, e, () => { e.hit(); this.addScore(SCORE_ENEMY); proj.destroy() })
@@ -1257,24 +1318,79 @@ export class GameScene extends Phaser.Scene {
 
   private fireBossSpecial(ability: AbilityType) {
     if (!this.boss?.active) return
-    this.cameras.main.flash(120, 255, 80, 0, false)
+    const bx = this.boss.x
+    const by = this.boss.y
 
-    const dirs = [-1, 0, 1]
-    dirs.forEach(d => {
-      const vx = d === 0 ? 0 : d * 480
-      const vy = d === 0 ? -500 : -240
-      const proj = this.physics.add.image(this.boss!.x, this.boss!.y - 20, 'fireball')
-      this.enemyProjectiles.add(proj)
-      const body = proj.body as Phaser.Physics.Arcade.Body
-      body.setVelocity(vx, vy).setGravityY(-400)
+    const alive = this.players.filter(p => p.isAlive)
+    if (alive.length === 0) return
+    const target = alive.reduce((a, b) =>
+      Math.abs(a.x - bx) < Math.abs(b.x - bx) ? a : b)
 
-      switch (ability) {
-        case AbilityType.Fire:     proj.setTint(0xff4400).setScale(1.5); break
-        case AbilityType.Ice:      proj.setTint(0x66ccff).setScale(1.3); break
-        case AbilityType.Electric: proj.setTint(0xffee00).setScale(1.6); break
+    switch (ability) {
+
+      case AbilityType.Fire: {
+        // Fan of 5 fireballs aimed at the nearest player
+        this.cameras.main.flash(80, 255, 80, 0, false)
+        const baseAngle = Phaser.Math.Angle.Between(bx, by, target.x, target.y)
+        const speed = 380
+        const fireTexKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
+        const offsets = [-0.5, -0.25, 0, 0.25, 0.5]
+        offsets.forEach(offset => {
+          const a = baseAngle + offset
+          const proj = this.physics.add.image(bx, by + 20, fireTexKey)
+          this.enemyProjectiles.add(proj)
+          ;(proj.body as Phaser.Physics.Arcade.Body)
+            .setVelocity(Math.cos(a) * speed, Math.sin(a) * speed)
+            .setGravityY(-800)
+          if (fireTexKey === 'fireball') proj.setTint(0xff4400).setScale(1.5)
+          proj.setAngle(Phaser.Math.RadToDeg(a))
+          this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: 450, repeat: -1 })
+          this.time.delayedCall(2600, () => { if (proj.active) proj.destroy() })
+        })
+        break
       }
-      this.time.delayedCall(2800, () => { if (proj.active) proj.destroy() })
-    })
+
+      case AbilityType.Ice: {
+        // 5 icicles falling straight down at positions spread around the player
+        this.cameras.main.flash(80, 80, 160, 255, false)
+        const iceTexKey = this.textures.exists('proj-ice') ? 'proj-ice' : 'fireball'
+        for (let i = 0; i < 5; i++) {
+          const spreadX = target.x + (i - 2) * 130
+          const proj = this.physics.add.image(spreadX, by, iceTexKey)
+          this.enemyProjectiles.add(proj)
+          ;(proj.body as Phaser.Physics.Arcade.Body)
+            .setVelocity(0, 440)
+            .setGravityY(-800)
+          if (iceTexKey === 'fireball') proj.setTint(0x66ccff).setScale(1.2)
+          proj.setAngle(90)
+          this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: 600, repeat: -1 })
+          this.time.delayedCall(3000, () => { if (proj.active) proj.destroy() })
+        }
+        break
+      }
+
+      case AbilityType.Electric: {
+        // Horizontal lightning bolt at the player's height — damages but doesn't instant-kill
+        const dir = target.x > bx ? 1 : -1
+        const boltLen = 900
+        const boltCx  = bx + dir * boltLen / 2
+        const boltY   = target.y
+
+        this.cameras.main.flash(100, 255, 240, 80, false)
+        const bolt = this.add.rectangle(boltCx, boltY, boltLen, 10, 0xffee00, 0.95).setDepth(15)
+        const glow = this.add.rectangle(boltCx, boltY, boltLen, 30, 0xffee00, 0.25).setDepth(14)
+        this.tweens.add({
+          targets: [bolt, glow], alpha: 0, scaleY: 2, duration: 350,
+          onComplete: () => { bolt.destroy(); glow.destroy() },
+        })
+
+        this.players.forEach(p => {
+          if (!p.isAlive) return
+          if (dir * (p.x - bx) > 0 && Math.abs(p.y - boltY) < 48) p.hitByEnemy()
+        })
+        break
+      }
+    }
   }
 
   private spawnEnemyProjectile(enemy: Enemy) {
@@ -1289,13 +1405,25 @@ export class GameScene extends Phaser.Scene {
     if (enemy.abilityType === AbilityType.Ice)      gy = 0
     if (enemy.abilityType === AbilityType.Electric) gy = -200
 
-    const proj = this.physics.add.image(enemy.x + dir * 20, enemy.y, 'fireball')
+    const isIce  = enemy.abilityType === AbilityType.Ice
+    const isFire = enemy.abilityType === AbilityType.Fire
+    const texKey = isFire && this.textures.exists('proj-fire') ? 'proj-fire'
+                 : isIce  && this.textures.exists('proj-ice')  ? 'proj-ice'
+                 : 'fireball'
+
+    const proj = this.physics.add.image(enemy.x + dir * 20, enemy.y, texKey)
     this.enemyProjectiles.add(proj)
     const body = proj.body as Phaser.Physics.Arcade.Body
     body.setVelocityX(dir * speed).setGravityY(gy)
 
-    if (enemy.abilityType === AbilityType.Ice)      proj.setTint(0x66ccff)
-    if (enemy.abilityType === AbilityType.Electric) proj.setTint(0xffdd00).setScale(1.4)
+    if (texKey === 'fireball') {
+      if (isIce)  proj.setTint(0x66ccff)
+      if (enemy.abilityType === AbilityType.Electric) proj.setTint(0xffdd00).setScale(1.4)
+    }
+    if (isFire || isIce) {
+      proj.setFlipX(dir < 0)
+      this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: isFire ? 450 : 600, repeat: -1 })
+    }
 
     this.time.delayedCall(2400, () => { if (proj.active) proj.destroy() })
   }
@@ -1312,20 +1440,21 @@ export class GameScene extends Phaser.Scene {
   private checkInhale(p: Player) {
     if (p.hasInhaled) return
 
+    // Block (destroy) enemy projectiles inside the inhale cone
+    const inhaleDir = p.flipX ? -1 : 1
+    ;(this.enemyProjectiles.getChildren() as Phaser.Physics.Arcade.Image[]).forEach(proj => {
+      if (!proj.active) return
+      const dx = proj.x - p.x
+      const dy = Math.abs(proj.y - p.y)
+      if (inhaleDir * dx > 0 && inhaleDir * dx <= p.inhaleRange() && dy < 55) proj.destroy()
+    })
+
     for (const e of this.enemies) {
       const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y)
       if (dist <= p.inhaleRange()) {
         e.pullToward(p.x, p.y, Phaser.Math.Linear(200, INHALE_PULL_SPEED, 1 - dist / p.inhaleRange()))
       } else {
         e.stopPull()
-      }
-    }
-
-    for (const c of this.crates) {
-      if (Phaser.Math.Distance.Between(p.x, p.y, c.x, c.y) < 50) {
-        p.captureSpriteObject(c as unknown as Phaser.Physics.Arcade.Sprite)
-        this.crates = this.crates.filter(x => x !== c)
-        return
       }
     }
 

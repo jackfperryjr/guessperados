@@ -53,7 +53,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)
     body.setSize(bw, bh, false)
-    body.setOffset((this.displayWidth - bw) / 2, Math.round(this.displayHeight * 0.12))
+    body.setOffset((this.displayWidth - bw) / 2, Math.round(this.displayHeight * 0.11))
     if (isFlying) body.setAllowGravity(false)
 
     this.play(`${this.animKey}-walk`)
