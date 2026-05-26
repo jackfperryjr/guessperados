@@ -15,6 +15,7 @@ export class TouchControls {
   private jumpHeld     = false
   private inhaleHeld   = false
   private abilityJust  = false
+  private meleeJust    = false
 
   private _enabled = true
   private _allObjects: (Phaser.GameObjects.Arc | Phaser.GameObjects.Text)[] = []
@@ -37,6 +38,7 @@ export class TouchControls {
       this.jumpHeld = false
       this.inhaleHeld = false
       this.abilityJust = false
+      this.meleeJust = false
       this.stickPointerId = null
       this.base.setVisible(false)
       this.thumb.setVisible(false)
@@ -51,6 +53,7 @@ export class TouchControls {
     this.btn(bx,       by,       '▲', 0x4fc3f7, () => { this.jumpHeld = true },   () => { this.jumpHeld = false })
     this.btn(bx,       by - 70,  'X',  0xa5d6a7, () => { this.abilityJust = true })
     this.btn(bx - 70,  by - 70,  'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
+    this.btn(bx - 70,  by,       '⚔', 0xef9a9a, () => { this.meleeJust = true })
   }
 
   private btn(
@@ -115,6 +118,7 @@ export class TouchControls {
 
     player.setInhaling(this.inhaleHeld)
     if (this.abilityJust) { player.useAbility(); this.abilityJust = false }
+    if (this.meleeJust)   { player.swingMelee(); this.meleeJust = false }
   }
 
   destroy() {

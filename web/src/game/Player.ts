@@ -30,6 +30,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   speedMultiplier  = 1.0
   controlsReversed = false
 
+  private hitCount        = 0
   private isFloating      = false
   private isInhaling      = false
   private invincible      = false
@@ -236,8 +237,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   hitByEnemy() {
     if (this.invincible || !this.isAlive) return
     SoundManager.playerHit()
-    this.hearts--
-    this.emit('heartLost', this.hearts)
+
+    this.hitCount++
+    if (this.hitCount >= 10) {
+      this.hitCount = 0
+      this.hearts--
+      this.emit('heartLost', this.hearts)
+    }
 
     this.invincible = true
     this.scene.tweens.add({
