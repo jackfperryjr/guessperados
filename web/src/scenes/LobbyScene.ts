@@ -12,7 +12,7 @@ const RED    = '#ff4444'
 
 // WebSocket server URL — override with VITE_WS_URL env var at build time
 const WS_URL = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_WS_URL
-  ?? `ws://${location.hostname}:3001`
+  ?? `ws://${location.hostname}:8080`
 
 export class LobbyScene extends Phaser.Scene {
   private nm!: NetworkManager
