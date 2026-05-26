@@ -15,6 +15,8 @@ const GAP     = 16
 export class CharacterSelectScene extends Phaser.Scene {
   private chars: CharInfo[] = []
   private playerCount = 1
+  private localPlayerId = 0
+  private isMultiplayer = false
   private selections: number[] = []
   private confirmed: boolean[] = []
   private cursors: Phaser.GameObjects.Rectangle[] = []
@@ -31,11 +33,13 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale
-    this.started     = false
-    this.playerCount = this.registry.get('playerCount') ?? 1
-    this.chars       = BootScene.getSelectableCharacters()
-    this.selections  = Array(this.playerCount).fill(0)
-    this.confirmed   = Array(this.playerCount).fill(false)
+    this.started       = false
+    this.playerCount   = this.registry.get('playerCount') ?? 1
+    this.localPlayerId = this.registry.get('localPlayerId') ?? 0
+    this.isMultiplayer = this.registry.get('networkManager') != null
+    this.chars         = BootScene.getSelectableCharacters()
+    this.selections    = Array(this.playerCount).fill(0)
+    this.confirmed     = Array(this.playerCount).fill(false)
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x080818)
     this.add.rectangle(width / 2, height / 2, width, height, 0x0a0030, 0.45)
@@ -66,9 +70,11 @@ export class CharacterSelectScene extends Phaser.Scene {
         const zone = this.add.zone(cx, rowY, CARD_W, CARD_H).setInteractive().setDepth(8)
         zone.on('pointerdown', () => {
           if (this.started) return
-          // Route to first unconfirmed player
-          const p = this.confirmed.indexOf(false)
-          if (p < 0) return
+          // In multiplayer each device only controls its own slot
+          const p = this.isMultiplayer
+            ? this.localPlayerId
+            : this.confirmed.indexOf(false)
+          if (p < 0 || this.confirmed[p]) return
           if (this.selections[p] === ci) {
             this.confirm(p)
           } else {
@@ -129,27 +135,41 @@ export class CharacterSelectScene extends Phaser.Scene {
 
     // Keyboard input
     const kb = this.input.keyboard!
-    kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(0, -1) })
-    kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(0,  1) })
-    kb.addKey('W').on('down', () => {
-      if (this.backFocused) this.focusBack(false)
-      else this.confirm(0)
-    })
-    kb.addKey('S').on('down', () => this.focusBack(true))
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => {
-      if (this.backFocused) this.goBack()
-      else this.tryStart()
-    })
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
-
-    if (this.playerCount > 1) {
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(1, -1) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(1,  1) })
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => {
+    if (this.isMultiplayer) {
+      // In multiplayer every key controls localPlayerId
+      const lp = this.localPlayerId
+      kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(lp, -1) })
+      kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(lp,  1) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(lp, -1) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(lp,  1) })
+      kb.addKey('W').on('down', () => { if (this.backFocused) this.focusBack(false); else this.confirm(lp) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => { if (this.backFocused) this.focusBack(false); else this.confirm(lp) })
+      kb.addKey('S').on('down', () => this.focusBack(true))
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => { if (this.backFocused) this.goBack(); else this.confirm(lp) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
+    } else {
+      kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(0, -1) })
+      kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(0,  1) })
+      kb.addKey('W').on('down', () => {
         if (this.backFocused) this.focusBack(false)
-        else this.confirm(1)
+        else this.confirm(0)
       })
+      kb.addKey('S').on('down', () => this.focusBack(true))
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => {
+        if (this.backFocused) this.goBack()
+        else this.tryStart()
+      })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
+      if (this.playerCount > 1) {
+        kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(1, -1) })
+        kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(1,  1) })
+        kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => {
+          if (this.backFocused) this.focusBack(false)
+          else this.confirm(1)
+        })
+      }
     }
 
     // Gamepad input
@@ -202,7 +222,11 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.confirmMarks[player].setVisible(true)
     this.updateCursorPos(player)
     this.updateStartText()
-    if (this.confirmed.every(Boolean)) this.startScene()
+    if (this.isMultiplayer) {
+      if (this.confirmed[this.localPlayerId]) this.startScene()
+    } else {
+      if (this.confirmed.every(Boolean)) this.startScene()
+    }
   }
 
   private updateCursorPos(player: number) {
@@ -214,17 +238,35 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   private updateStartText() {
-    if (this.confirmed.every(Boolean)) {
-      this.startText.setText('ALL READY!').setColor('#ffe066')
-    } else if (this.confirmed.some(Boolean)) {
-      this.startText.setText('WAITING FOR ALL PLAYERS...').setColor('#aaccdd')
+    if (this.isMultiplayer) {
+      if (this.confirmed[this.localPlayerId]) {
+        this.startText.setText('CONFIRMED! STARTING...').setColor('#ffe066')
+      } else {
+        this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
+      }
     } else {
-      this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
+      if (this.confirmed.every(Boolean)) {
+        this.startText.setText('ALL READY!').setColor('#ffe066')
+      } else if (this.confirmed.some(Boolean)) {
+        this.startText.setText('WAITING FOR ALL PLAYERS...').setColor('#aaccdd')
+      } else {
+        this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
+      }
     }
   }
 
   private tryStart() {
     if (this.started) return
+    if (this.isMultiplayer) {
+      if (!this.confirmed[this.localPlayerId]) {
+        this.confirmed[this.localPlayerId] = true
+        this.confirmMarks[this.localPlayerId].setVisible(true)
+        this.updateCursorPos(this.localPlayerId)
+        this.updateStartText()
+      }
+      this.startScene()
+      return
+    }
     if (this.playerCount === 1 && !this.confirmed[0]) {
       this.confirmed[0] = true
       this.startScene()
