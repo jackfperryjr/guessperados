@@ -22,6 +22,9 @@ export class CharacterSelectScene extends Phaser.Scene {
   private playerLabels: Phaser.GameObjects.Text[] = []
   private cards: { x: number; y: number }[] = []
   private startText!: Phaser.GameObjects.Text
+  private backBtn!: Phaser.GameObjects.Text
+  private backCursor!: Phaser.GameObjects.Text
+  private backFocused = false
   private started = false
 
   constructor() { super({ key: 'CharacterSelectScene' }) }
@@ -111,27 +114,42 @@ export class CharacterSelectScene extends Phaser.Scene {
     }).setOrigin(0.5)
     this.updateStartText()
 
-    // On-screen PLAY button (works for touch, mouse, and keyboard users)
-    const playBtn = this.add.text(width / 2, height - 38, '▶  PLAY', {
-      fontSize: '11px', fontFamily: FONT,
-      color: '#000000', backgroundColor: '#ffe066',
-      padding: { x: 28, y: 10 },
+    this.backBtn = this.add.text(width / 2, height - 38, '< BACK', {
+      fontSize: '10px', fontFamily: FONT, color: '#7799aa',
+      stroke: '#000', strokeThickness: 3,
+      backgroundColor: '#00000044', padding: { x: 18, y: 10 },
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(10)
-    playBtn.on('pointerdown', () => this.tryStart())
-    playBtn.on('pointerover', () => playBtn.setStyle({ backgroundColor: '#ffcc00' }))
-    playBtn.on('pointerout',  () => playBtn.setStyle({ backgroundColor: '#ffe066' }))
+    this.backCursor = this.add.text(0, height - 38, '►', {
+      fontSize: '10px', fontFamily: FONT, color: '#ffe066',
+    }).setOrigin(1, 0.5).setDepth(10).setVisible(false)
+
+    this.backBtn.on('pointerover', () => this.backBtn.setStyle({ color: '#ffffff' }))
+    this.backBtn.on('pointerout',  () => this.backBtn.setStyle({ color: this.backFocused ? '#ffffff' : '#7799aa' }))
+    this.backBtn.on('pointerdown', () => this.goBack())
 
     // Keyboard input
     const kb = this.input.keyboard!
-    kb.addKey('A').on('down', () => this.move(0, -1))
-    kb.addKey('D').on('down', () => this.move(0,  1))
-    kb.addKey('W').on('down', () => this.confirm(0))
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => this.tryStart())
+    kb.addKey('A').on('down', () => { if (!this.backFocused) this.move(0, -1) })
+    kb.addKey('D').on('down', () => { if (!this.backFocused) this.move(0,  1) })
+    kb.addKey('W').on('down', () => {
+      if (this.backFocused) this.focusBack(false)
+      else this.confirm(0)
+    })
+    kb.addKey('S').on('down', () => this.focusBack(true))
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN).on('down', () => this.focusBack(true))
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER).on('down', () => {
+      if (this.backFocused) this.goBack()
+      else this.tryStart()
+    })
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.goBack())
 
     if (this.playerCount > 1) {
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => this.move(1, -1))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => this.move(1,  1))
-      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down',    () => this.confirm(1))
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT).on('down',  () => { if (!this.backFocused) this.move(1, -1) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT).on('down', () => { if (!this.backFocused) this.move(1,  1) })
+      kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down', () => {
+        if (this.backFocused) this.focusBack(false)
+        else this.confirm(1)
+      })
     }
 
     // Gamepad input
@@ -142,9 +160,12 @@ export class CharacterSelectScene extends Phaser.Scene {
         const padIdx = activePads.indexOf(pad)
         if (padIdx < 0) return
         const p = Math.min(padIdx, this.playerCount - 1)
-        if (button.index === 14) this.move(p, -1)
-        if (button.index === 15) this.move(p,  1)
-        if (button.index === 0)  this.confirm(p)
+        if (button.index === 13) { this.focusBack(true);  return }
+        if (button.index === 12) { if (this.backFocused) this.focusBack(false); return }
+        if (button.index === 14) { if (!this.backFocused) this.move(p, -1) }
+        if (button.index === 15) { if (!this.backFocused) this.move(p,  1) }
+        if (button.index === 0)  { if (this.backFocused) this.goBack(); else this.confirm(p) }
+        if (button.index === 1)  this.goBack()
         if (button.index === 9)  this.tryStart()
       },
     )
@@ -194,11 +215,11 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private updateStartText() {
     if (this.confirmed.every(Boolean)) {
-      this.startText.setText('ALL READY!  PRESS START OR ENTER').setColor('#ffe066')
+      this.startText.setText('ALL READY!').setColor('#ffe066')
     } else if (this.confirmed.some(Boolean)) {
       this.startText.setText('WAITING FOR ALL PLAYERS...').setColor('#aaccdd')
     } else {
-      this.startText.setText('CONFIRM YOUR SELECTION  (A / W)').setColor('#556677')
+      this.startText.setText('TAP A CHARACTER TO CONFIRM').setColor('#556677')
     }
   }
 
@@ -219,5 +240,23 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.registry.set('selectedChars', selectedChars)
     this.cameras.main.fadeOut(400, 0, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+  }
+
+  private focusBack(on: boolean) {
+    this.backFocused = on
+    this.backBtn.setStyle({ color: on ? '#ffffff' : '#7799aa' })
+    if (on) {
+      const b = this.backBtn.getBounds()
+      this.backCursor.setPosition(b.left - 6, b.centerY)
+    }
+    this.backCursor.setVisible(on)
+  }
+
+  private goBack() {
+    if (this.started) return
+    const nm = this.registry.get('networkManager')
+    this.cameras.main.fadeOut(300, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () =>
+      this.scene.start(nm ? 'LobbyScene' : 'MenuScene'))
   }
 }

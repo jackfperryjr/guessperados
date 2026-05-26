@@ -34,18 +34,14 @@ export class LobbyScene extends Phaser.Scene {
   private activeItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private focusIdx = 0
 
-  // Background
-  private stars: Phaser.GameObjects.TileSprite[] = []
 
   constructor() { super({ key: 'LobbyScene' }) }
 
   create() {
     const { width, height } = this.scale
 
-    this.stars.push(
-      this.add.tileSprite(width / 2, height / 2, width, height, 'bg-stars').setScrollFactor(0),
-      this.add.tileSprite(width / 2, height / 2, width, height, 'bg-nebula-blue').setScrollFactor(0).setAlpha(0.6),
-    )
+    this.add.rectangle(width / 2, height / 2, width, height, 0x080818)
+    this.add.rectangle(width / 2, height / 2, width, height, 0x0a0030, 0.45)
 
     this.nm = new NetworkManager(WS_URL)
 
@@ -112,8 +108,8 @@ export class LobbyScene extends Phaser.Scene {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    items.push(this.add.text(width / 2, height * 0.14, 'ONLINE', {
-      fontSize: '36px', fontFamily: FONT, color: YELLOW,
+    items.push(this.add.text(width / 2, 44, 'ONLINE', {
+      fontSize: '16px', fontFamily: FONT, color: YELLOW,
       stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5))
 
@@ -122,21 +118,21 @@ export class LobbyScene extends Phaser.Scene {
     }).setOrigin(0.5))
 
     const btnCreate = this.menuBtn(width / 2, height * 0.44, 'CREATE ROOM')
-    const btnJoin   = this.menuBtn(width / 2, height * 0.57, 'JOIN ROOM')
-    const btnBack   = this.menuBtn(width / 2, height * 0.74, '< BACK')
+    const btnJoin   = this.menuBtn(width / 2, height * 0.58, 'JOIN ROOM')
+    const btnBack   = this.menuBtn(width / 2, height * 0.76, '< BACK')
 
-    const errText = this.add.text(width / 2, height * 0.66, '', {
+    const errText = this.add.text(width / 2, height * 0.68, '', {
       fontSize: '9px', fontFamily: FONT, color: RED,
     }).setOrigin(0.5)
 
     btnCreate.on('pointerdown', async () => {
-      btnCreate.setColor(DIM)
+      btnCreate.setAlpha(0.5).disableInteractive()
       try {
         await this.nm.connect()
         this.setupNetworkCallbacks()
         this.nm.createRoom()
       } catch {
-        btnCreate.setColor(WHITE)
+        btnCreate.setAlpha(1).setInteractive({ useHandCursor: true })
         errText.setText('Could not reach server\nMake sure server is running')
       }
     })
@@ -169,28 +165,30 @@ export class LobbyScene extends Phaser.Scene {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    items.push(this.add.text(width / 2, height * 0.12, 'ENTER ROOM CODE', {
-      fontSize: '20px', fontFamily: FONT, color: YELLOW,
-      stroke: '#000', strokeThickness: 4,
+    items.push(this.add.text(width / 2, 44, 'JOIN ROOM', {
+      fontSize: '16px', fontFamily: FONT, color: YELLOW,
+      stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5))
+
+    items.push(this.add.rectangle(width / 2, height * 0.40, 340, 160, 0x111128).setStrokeStyle(1, 0x223355))
 
     items.push(this.add.text(width / 2, height * 0.28, 'Type the 6-character code:', {
       fontSize: '9px', fontFamily: FONT, color: DIM,
     }).setOrigin(0.5))
 
-    this.codeDisplay = this.add.text(width / 2, height * 0.42, '______', {
+    this.codeDisplay = this.add.text(width / 2, height * 0.40, '______', {
       fontSize: '36px', fontFamily: FONT, color: CYAN, letterSpacing: 18,
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5)
     items.push(this.codeDisplay)
 
-    this.joinError = this.add.text(width / 2, height * 0.56, '', {
+    this.joinError = this.add.text(width / 2, height * 0.54, '', {
       fontSize: '9px', fontFamily: FONT, color: RED,
     }).setOrigin(0.5)
     items.push(this.joinError)
 
-    const btnJoin = this.menuBtn(width / 2, height * 0.67, 'JOIN')
-    const btnBack = this.menuBtn(width / 2, height * 0.80, '< BACK')
+    const btnJoin = this.menuBtn(width / 2, height * 0.65, 'JOIN')
+    const btnBack = this.menuBtn(width / 2, height * 0.79, '< BACK')
 
     btnJoin.on('pointerdown', () => this.submitJoinCode(btnJoin))
     btnBack.on('pointerdown', () => {
@@ -228,14 +226,14 @@ export class LobbyScene extends Phaser.Scene {
 
   private async submitJoinCode(btn: Phaser.GameObjects.Text) {
     if (this.codeEntry.length < 6) { this.joinError.setText('Please enter 6 characters'); return }
-    btn.setColor(DIM)
+    btn.setAlpha(0.5).disableInteractive()
     this.joinError.setText('')
     try {
       await this.nm.connect()
       this.setupNetworkCallbacks()
       this.nm.joinRoom(this.codeEntry)
     } catch {
-      btn.setColor(WHITE)
+      btn.setAlpha(1).setInteractive({ useHandCursor: true })
       this.joinError.setText('Could not reach server\nMake sure server is running')
     }
   }
@@ -246,17 +244,19 @@ export class LobbyScene extends Phaser.Scene {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    items.push(this.add.text(width / 2, height * 0.08, 'WAITING FOR PLAYERS', {
-      fontSize: '18px', fontFamily: FONT, color: YELLOW,
-      stroke: '#000', strokeThickness: 4,
+    items.push(this.add.text(width / 2, 44, 'WAITING FOR PLAYERS', {
+      fontSize: '16px', fontFamily: FONT, color: YELLOW,
+      stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5))
 
-    // Room code display
-    items.push(this.add.text(width / 2, height * 0.20, 'ROOM CODE', {
+    // Room code card
+    items.push(this.add.rectangle(width / 2, height * 0.27, 340, 120, 0x111128).setStrokeStyle(1, 0x223355))
+
+    items.push(this.add.text(width / 2, height * 0.19, 'ROOM CODE', {
       fontSize: '9px', fontFamily: FONT, color: DIM,
     }).setOrigin(0.5))
 
-    const codeLabel = this.add.text(width / 2, height * 0.28, '------', {
+    const codeLabel = this.add.text(width / 2, height * 0.27, '------', {
       fontSize: '32px', fontFamily: FONT, color: CYAN, letterSpacing: 14,
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5)
@@ -264,7 +264,7 @@ export class LobbyScene extends Phaser.Scene {
     ;(codeLabel as Phaser.GameObjects.Text & { _isCodeLabel: boolean })._isCodeLabel = true
     items.push(codeLabel)
 
-    const copyBtn = this.add.text(width / 2, height * 0.36, '[ COPY CODE ]', {
+    const copyBtn = this.add.text(width / 2, height * 0.35, '[ COPY CODE ]', {
       fontSize: '9px', fontFamily: FONT, color: CYAN,
       stroke: '#000', strokeThickness: 2,
       backgroundColor: '#00000044', padding: { x: 10, y: 6 },
@@ -284,6 +284,9 @@ export class LobbyScene extends Phaser.Scene {
     })
     items.push(copyBtn)
 
+    // Player slots card
+    items.push(this.add.rectangle(width / 2, height * 0.57, 340, 148, 0x111128).setStrokeStyle(1, 0x223355))
+
     items.push(this.add.text(width / 2, height * 0.44, 'PLAYERS', {
       fontSize: '9px', fontFamily: FONT, color: DIM,
     }).setOrigin(0.5))
@@ -293,7 +296,7 @@ export class LobbyScene extends Phaser.Scene {
     this.slotTexts = []
 
     for (let i = 0; i < 4; i++) {
-      const t = this.add.text(width / 2, height * 0.51 + i * 34, SLOT_LABELS[i], {
+      const t = this.add.text(width / 2, height * 0.50 + i * 30, SLOT_LABELS[i], {
         fontSize: '11px', fontFamily: FONT, color: PLAYER_COLORS[i],
         stroke: '#000', strokeThickness: 2,
       }).setOrigin(0.5).setAlpha(0.3)
@@ -422,8 +425,4 @@ export class LobbyScene extends Phaser.Scene {
     return btn
   }
 
-  update() {
-    this.stars[0].tilePositionX += 0.08
-    this.stars[1].tilePositionX += 0.18
-  }
 }
