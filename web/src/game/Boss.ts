@@ -76,6 +76,7 @@ export class Boss extends Enemy {
     if (body.blocked.left)  this.bossWalkDir = 1
     if (body.blocked.right) this.bossWalkDir = -1
     body.setVelocityX(PATROL_SPEED * this.bossWalkDir)
+    if (this.bossFlying) body.setVelocityY(Math.sin(this.scene.time.now / 800) * 60)
     this.setFlipX(this.bossWalkDir > 0)
 
     this.bossStateTimer -= dt
