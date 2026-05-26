@@ -1,5 +1,3 @@
 [build]
-builder = "nixpacks"
-
-[deploy]
-startCommand = "node index.js"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
