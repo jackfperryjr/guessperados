@@ -159,6 +159,13 @@ export const SoundManager = {
 
   // ── SFX ───��──────────────────────────────────────────────────────────────
 
+  meleeSwing() {
+    const c = ac(); const t = c.currentTime
+    noiseBlip(t,        0.05, 0.22, 650, 8)
+    tone(240, t,        0.05, 0.16, 'sawtooth')
+    tone(120, t + 0.03, 0.07, 0.09, 'sine')
+  },
+
   playerHit() {
     const c = ac(); const t = c.currentTime
     noiseBlip(t,        0.10, 0.28, 320)

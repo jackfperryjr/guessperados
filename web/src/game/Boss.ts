@@ -3,21 +3,19 @@ import { AbilityType } from '../types'
 import { Enemy } from './Enemy'
 import { Player } from './Player'
 
-type BossState = 'patrol' | 'charge' | 'stagger'
+type BossState = 'patrol' | 'stagger'
 
-const PATROL_SPEED = 100
-const CHARGE_SPEED = 300
+const PATROL_SPEED = 80
 
 export class Boss extends Enemy {
   readonly maxHp: number
   private bossState: BossState = 'patrol'
-  private bossStateTimer = 0
-  private chargeDir = 1
+  private staggerTimer = 0
   private bossWalkDir = 1
   private invincible = false
-  private attackInterval: number
-  private specialTimer = 6000
+  private bossAttackTimer: number
   private bossFlying = false
+  private spawnY = 0
   players: Player[] = []
 
   constructor(
@@ -25,27 +23,25 @@ export class Boss extends Enemy {
     x: number,
     y: number,
     hp: number,
-    attackInterval = 3000,
+    _attackInterval = 3000,
   ) {
     super(scene, x, y, AbilityType.None)
     this.hp = hp
     this.maxHp = hp
-    this.attackInterval = attackInterval
-    this.bossStateTimer = attackInterval
+    this.bossAttackTimer = 2000 + Math.random() * 1500
+    this.spawnY = y
 
     const body = this.body as Phaser.Physics.Arcade.Body
 
     if (scene.textures.exists('sheet-dragon')) {
-      // Dragon boss — 3× hero size, flying
       this.setTexture('sheet-dragon', 0)
-      this.setScale(3.45)                   // 64px frame × 3.45 ≈ 221px
+      this.setScale(3.45)
       body.setAllowGravity(false)
       body.setSize(110, 90)
       body.setOffset((this.displayWidth - 110) / 2, Math.round(this.displayHeight * 0.27))
       this.bossFlying = true
       if (scene.anims.exists('sheet-dragon-walk')) this.play('sheet-dragon-walk')
     } else {
-      // Fallback mom boss
       this.setScale(1.3)
       body.setSize(46, 50)
     }
@@ -56,47 +52,29 @@ export class Boss extends Enemy {
     const dt = this.scene.game.loop.delta
 
     if (this.bossState === 'stagger') {
-      this.bossStateTimer -= dt
-      if (this.bossStateTimer <= 0) {
+      this.staggerTimer -= dt
+      if (this.staggerTimer <= 0) {
         this.bossState = 'patrol'
-        this.bossStateTimer = this.attackInterval * (0.7 + Math.random() * 0.6)
         this.clearTint()
       }
-      body.setVelocityX(0)
+      body.setVelocity(0, 0)
       return
     }
 
-    if (this.bossState === 'charge') {
-      body.setVelocityX(this.chargeDir * CHARGE_SPEED)
-      this.setFlipX(this.chargeDir > 0)
-      if (body.blocked.left || body.blocked.right) this.enterStagger(500)
-      return
-    }
-
+    // Hover patrol — reverse at walls
     if (body.blocked.left)  this.bossWalkDir = 1
     if (body.blocked.right) this.bossWalkDir = -1
     body.setVelocityX(PATROL_SPEED * this.bossWalkDir)
-    if (this.bossFlying) body.setVelocityY(Math.sin(this.scene.time.now / 800) * 60)
+    if (this.bossFlying) {
+      // Spring keeps boss near spawnY so it can't drift to the floor
+      body.setVelocityY(Math.sin(this.scene.time.now / 800) * 55 - (this.y - this.spawnY) * 2)
+    }
     this.setFlipX(this.bossWalkDir > 0)
 
-    this.bossStateTimer -= dt
-    if (this.bossStateTimer <= 0) {
-      const alive = this.players.filter(p => p.isAlive)
-      if (alive.length > 0) {
-        const nearest = alive.reduce((a, b) =>
-          Math.abs(a.x - this.x) < Math.abs(b.x - this.x) ? a : b,
-        )
-        this.chargeDir = nearest.x > this.x ? 1 : -1
-        this.bossState = 'charge'
-        this.setTint(0xff4400)
-        this.bossStateTimer = this.attackInterval * (0.7 + Math.random() * 0.6)
-      }
-    }
-
-    // Special attack — fires on a separate timer regardless of patrol/charge
-    this.specialTimer -= dt
-    if (this.specialTimer <= 0) {
-      this.specialTimer = 8000 + Math.random() * 4000
+    // Attack timer
+    this.bossAttackTimer -= dt
+    if (this.bossAttackTimer <= 0) {
+      this.bossAttackTimer = 3000 + Math.random() * 2000
       const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
       this.emit('bossAttack', abilities[Math.floor(Math.random() * abilities.length)])
     }
@@ -129,13 +107,12 @@ export class Boss extends Enemy {
     })
   }
 
-  // Boss ignores inhale entirely
   pullToward(_tx: number, _ty: number, _speed: number) {}
   stopPull() {}
 
   private enterStagger(ms: number) {
     this.bossState = 'stagger'
-    this.bossStateTimer = ms
+    this.staggerTimer = ms
     this.setTint(0xffffff)
     ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
   }
