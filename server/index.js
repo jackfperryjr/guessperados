@@ -26,7 +26,7 @@ function broadcast(room, msg, excludeWs = null) {
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' })
-  res.end('Guessperados WS Server')
+  res.end('Friends Slay the Dragon WS Server')
 })
 
 const wss = new WebSocketServer({ server })
@@ -103,6 +103,6 @@ wss.on('connection', (ws) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`Guessperados server listening on port ${PORT}`)
+  console.log(`Friends Slay the Dragon server listening on port ${PORT}`)
   console.log(`Players connect via ws://localhost:${PORT}`)
 })

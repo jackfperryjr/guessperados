@@ -9,7 +9,6 @@ const PATROL_SPEED = 100
 const CHARGE_SPEED = 300
 
 export class Boss extends Enemy {
-  private hp: number
   readonly maxHp: number
   private bossState: BossState = 'patrol'
   private bossStateTimer = 0
@@ -18,6 +17,7 @@ export class Boss extends Enemy {
   private invincible = false
   private attackInterval: number
   private specialTimer = 6000
+  private bossFlying = false
   players: Player[] = []
 
   constructor(
@@ -32,9 +32,23 @@ export class Boss extends Enemy {
     this.maxHp = hp
     this.attackInterval = attackInterval
     this.bossStateTimer = attackInterval
-    this.setScale(1.3)
+
     const body = this.body as Phaser.Physics.Arcade.Body
-    body.setSize(46, 50)
+
+    if (scene.textures.exists('sheet-dragon')) {
+      // Dragon boss — 3× hero size, flying
+      this.setTexture('sheet-dragon', 0)
+      this.setScale(3.45)                   // 64px frame × 3.45 ≈ 221px
+      body.setAllowGravity(false)
+      body.setSize(110, 90)
+      body.setOffset((this.displayWidth - 110) / 2, Math.round(this.displayHeight * 0.27))
+      this.bossFlying = true
+      if (scene.anims.exists('sheet-dragon-walk')) this.play('sheet-dragon-walk')
+    } else {
+      // Fallback mom boss
+      this.setScale(1.3)
+      body.setSize(46, 50)
+    }
   }
 
   update() {
@@ -62,6 +76,7 @@ export class Boss extends Enemy {
     if (body.blocked.left)  this.bossWalkDir = 1
     if (body.blocked.right) this.bossWalkDir = -1
     body.setVelocityX(PATROL_SPEED * this.bossWalkDir)
+    if (this.bossFlying) body.setVelocityY(Math.sin(this.scene.time.now / 800) * 60)
     this.setFlipX(this.bossWalkDir > 0)
 
     this.bossStateTimer -= dt

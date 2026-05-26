@@ -10,45 +10,52 @@ import Phaser from 'phaser'
 
 const SPRITES_CONFIGURED = true
 
-const FRAME_W = 84   // 252 px sheet ÷ 3 columns
-const FRAME_H = 84   // 252 px sheet ÷ 3 rows
+type FrameRange = { start: number; end: number }
 
-const SHEETS = {
-  red:    'characters-red.png',
-  blue:   'characters-blue.png',
-  green:  'characters-green.png',
-  orange: 'characters-orange.png',   // add this file for P3 sprite sheet
+// Player sheets — key becomes texture 'sheet-{key}', anim prefix 'char-{key}'
+// New sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
+const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?: boolean; name?: string; anim?: Partial<Record<string, FrameRange>> }> = {
+  player0: { file: 'conrad.png',            fw: 64, fh: 64, selectable: true, name: 'CONRAD' },
+  player1: { file: 'carter.png',            fw: 64, fh: 64, selectable: true, name: 'CARTER' },
+  callum:  { file: 'callum.png',            fw: 64, fh: 64, selectable: true, name: 'CALLUM' },
+  coco:    { file: 'coco.png',              fw: 64, fh: 64, selectable: true, name: 'COCO' },
+  eric:    { file: 'eric.png',              fw: 64, fh: 64, selectable: true, name: 'ERIC' },
+  green:   { file: 'characters-green.png',  fw: 84, fh: 84 },
+  yellow:  { file: 'characters-yellow.png', fw: 84, fh: 84 },
 }
 
 // Which sheet each player uses (falls back to generated texture if file is missing)
-const PLAYER_SHEETS: Record<number, keyof typeof SHEETS> = {
-  0: 'red',
-  1: 'blue',
+const PLAYER_SHEETS: Record<number, string> = {
+  0: 'player0',
+  1: 'player1',
   2: 'green',
-  3: 'orange',
+  3: 'yellow',
 }
 
-// 3×3 grid layout (frames 0-8):
-//  Row 0 (0,1,2)  — front/idle poses
-//  Row 1 (3,4,5)  — side standing poses
-//  Row 2 (6,7,8)  — side walking cycle
-// Adjust start/end here once you confirm which frames show which pose.
+// 4×4 grid layout (frames 0-15, 64×64 each):
+//  Row 0 (0–3)  — idle / walk cycle
+//  Row 1 (4–7)  — jump / float / fall / inhale
+//  Row 2 (8–11) — (reserved for future poses)
+//  Row 3 (12–15)— (reserved for puffed / special)
+// Adjust start/end once you confirm the actual frame order in the sheet.
 const ANIM_FRAMES = {
-  idle:   { start: 1, end: 1 },   // row 0: front-facing bob
-  walk:   { start: 1, end: 2 },   // row 2: side walk cycle
-  jump:   { start: 3, end: 3 },   // row 1, col 0
-  float:  { start: 1, end: 1 },   // row 1, col 1
-  inhale: { start: 2, end: 2 },   // row 0, col 1 (slight turn)
-  puffed: { start: 0, end: 0 },   // row 0, col 0 (front face)
-  fall:   { start: 1, end: 1 },   // row 1, col 2
+  idle:   { start: 14, end: 14 },
+  walk:   { start: 0, end: 3 },
+  jump:   { start: 4, end: 4 },
+  float:  { start: 8, end: 8 },
+  inhale: { start: 10, end: 10 },
+  puffed: { start: 7, end: 7 },
+  fall:   { start: 12, end: 12 },
+  melee:  { start: 11, end: 11 },
 }
 // ── Enemy sheet config ────────────────────────────────────────────────────────
-const ENEMY_SHEETS = [
-  { key: 'sheet-enemy-dragon',   file: 'dragon.png',   fw: 84,  fh: 84,  walkEnd: 8 },
-  { key: 'sheet-enemy-duckbot',  file: 'duckbot.png',  fw: 84,  fh: 84,  walkEnd: 8 },
-  { key: 'sheet-enemy-sqoomba',  file: 'sqoomba.png',  fw: 84,  fh: 84,  walkEnd: 8 },
-  { key: 'sheet-enemy-troomba',  file: 'troomba.png',  fw: 84,  fh: 84,  walkEnd: 8 },
-  { key: 'sheet-enemy-pinklady', file: 'pinklady.png', fw: 128, fh: 128, walkEnd: 7 },
+// New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
+const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number }[] = [
+  { key: 'sheet-enemy-zombie',   file: 'zombie.png',   fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
+  { key: 'sheet-enemy-duck',     file: 'duck.png',     fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
+  { key: 'sheet-enemy-skeleton', file: 'skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
+  { key: 'sheet-enemy-mom',      file: 'mom.png',      fw: 64, fh: 64, walkStart: 4,  walkEnd: 15 },
+  { key: 'sheet-dragon',         file: 'dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -57,20 +64,29 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     if (SPRITES_CONFIGURED) {
-      for (const [key, file] of Object.entries(SHEETS)) {
-        this.load.spritesheet(`sheet-${key}`, `assets/${file}`, {
-          frameWidth: FRAME_W, frameHeight: FRAME_H,
-        })
+      for (const [key, { file, fw, fh }] of Object.entries(SHEETS)) {
+        this.load.spritesheet(`sheet-${key}`, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
       }
     }
     for (const { key, file, fw, fh } of ENEMY_SHEETS) {
       this.load.spritesheet(key, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
     }
-    this.load.image('logo', 'assets/guessperados.jpg')
+    this.load.image('fire_ability_icon',      'assets/fire_ability_icon.png')
+    this.load.image('lightning_ability_icon', 'assets/lightning_ability_icon.png')
+    this.load.image('ice_ability_icon',       'assets/ice_ability_icon.png')
+    this.load.image('fire_ability',           'assets/fire_ability.png')
+    this.load.image('lightning_ability',      'assets/lightning_ability.png')
+    this.load.image('ice_ability',            'assets/ice_ability.png')
+    this.load.image('logo', 'assets/friendsslaythedragon.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
+    this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
+    this.load.image('tileset', 'tileset/one/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map', 'tileset/boss/map.json')
+    this.load.image('boss-tileset', 'tileset/boss/spritesheet.png')
   }
 
   create() {
+    console.log('%c🏰 CASTLE BUILD — BootScene running', 'background:#330a00;color:#ffcc00;font-size:16px;padding:4px 8px')
     this.genCharacters()
     this.genTiles()
     this.genObjects()
@@ -83,33 +99,34 @@ export class BootScene extends Phaser.Scene {
   }
 
   private setupAnimations() {
-    for (const [key] of Object.entries(SHEETS)) {
+    for (const [key, cfg] of Object.entries(SHEETS)) {
       const textureKey = `sheet-${key}`
       if (!this.textures.exists(textureKey)) continue  // file not found — skip
 
       const prefix = `char-${key}`
-      for (const [name, range] of Object.entries(ANIM_FRAMES)) {
+      const frames = { ...ANIM_FRAMES, ...(cfg.anim ?? {}) }
+      for (const [name, range] of Object.entries(frames)) {
         this.anims.create({
           key:       `${prefix}-${name}`,
           frames:    this.anims.generateFrameNumbers(textureKey, range),
           frameRate: name === 'walk' ? 8 : name === 'inhale' ? 10 : 6,
-          repeat:    name === 'jump' || name === 'fall' ? 0 : -1,
+          repeat:    name === 'jump' || name === 'fall' || name === 'melee' ? 0 : -1,
         })
       }
     }
   }
 
   private setupEnemyAnimations() {
-    for (const { key } of ENEMY_SHEETS) {
+    for (const { key, walkStart, walkEnd } of ENEMY_SHEETS) {
       if (!this.textures.exists(key)) continue
       this.anims.create({
         key: `${key}-walk`,
-        frames: this.anims.generateFrameNumbers(key, { start: 0, end: 1 }),
+        frames: this.anims.generateFrameNumbers(key, { start: walkStart, end: walkEnd }),
         frameRate: 8, repeat: -1,
       })
       this.anims.create({
         key: `${key}-idle`,
-        frames: this.anims.generateFrameNumbers(key, { start: 0, end: 1 }),
+        frames: this.anims.generateFrameNumbers(key, { start: walkStart, end: walkStart }),
         frameRate: 4, repeat: -1,
       })
     }
@@ -129,6 +146,17 @@ export class BootScene extends Phaser.Scene {
   // Fallback texture when no sprite sheet is available
   static getFallbackTexture(playerId: number): string {
     return ['player', 'player-2', 'player-2', 'player-3'][playerId] ?? 'player'
+  }
+
+  static getSelectableCharacters(): { key: string; name: string; sheetKey: string; animPrefix: string }[] {
+    return Object.entries(SHEETS)
+      .filter(([, cfg]) => cfg.selectable)
+      .map(([key, cfg]) => ({
+        key,
+        name:       cfg.name ?? key.toUpperCase(),
+        sheetKey:   `sheet-${key}`,
+        animPrefix: `char-${key}`,
+      }))
   }
 
   // ── characters ──────────────────────────────────────────────────────────────
@@ -379,6 +407,20 @@ export class BootScene extends Phaser.Scene {
     d.fillStyle(0x607d8b); d.fillRect(4, 4, 10, 10)
     d.fillStyle(0x607d8b); d.fillRect(18, 18, 10, 10)
     d.generateTexture('destructible', 32, 32); d.destroy()
+
+    // Castle stone — cosmic purple brickwork
+    const s = this.g()
+    s.fillStyle(0x35304e, 1); s.fillRect(0, 0, 32, 32)
+    s.fillStyle(0x473f62, 1); s.fillRect(1, 1, 14, 14)   // top-left brick
+    s.fillStyle(0x2e2944, 1); s.fillRect(17, 1, 14, 14)  // top-right brick
+    s.fillStyle(0x2e2944, 1); s.fillRect(1, 17, 14, 14)  // bot-left brick
+    s.fillStyle(0x473f62, 1); s.fillRect(17, 17, 14, 14) // bot-right brick
+    s.fillStyle(0x1c1832, 1); s.fillRect(0, 15, 32, 2)   // horizontal mortar
+    s.fillStyle(0x1c1832, 1); s.fillRect(15, 0, 2, 15)   // vertical mortar top
+    s.fillStyle(0x1c1832, 1); s.fillRect(15, 17, 2, 15)  // vertical mortar bot
+    s.fillStyle(0x9966ff, 0.30); s.fillRect(1, 1, 12, 2) // cosmic highlight L
+    s.fillStyle(0x9966ff, 0.30); s.fillRect(17, 17, 12, 2)// cosmic highlight R
+    s.generateTexture('tile-castle', 32, 32); s.destroy()
   }
 
   // ── game objects ─────────────────────────────────────────────────────────────
@@ -458,29 +500,6 @@ export class BootScene extends Phaser.Scene {
     this.genPlanet('planet-purple', 36,  0x4a148c, 0x7b1fa2, 0xce93d8)
     this.genPlanet('planet-red',    56,  0x7f0000, 0xb71c1c, 0xff5722)
 
-    // Pixel rapier (32×8) — origin used at (0.15, 0.5) so grip is pivot
-    const rp = this.g()
-    // Pommel
-    rp.fillStyle(0x999999); rp.fillRect(0, 2, 3, 4)
-    rp.fillStyle(0xcccccc); rp.fillRect(0, 2, 3, 2)
-    // Grip (leather)
-    rp.fillStyle(0x6d3b0e); rp.fillRect(3, 2, 6, 4)
-    rp.fillStyle(0x8b5e2c); rp.fillRect(3, 2, 6, 1)
-    rp.fillStyle(0x3d1f00); rp.fillRect(3, 5, 6, 1)
-    // Guard (gold crosspiece, full height)
-    rp.fillStyle(0xcb9b00); rp.fillRect(9, 0, 3, 8)
-    rp.fillStyle(0xffe57f); rp.fillRect(9, 0, 3, 2)
-    rp.fillStyle(0x8a6200); rp.fillRect(9, 6, 3, 2)
-    // Blade
-    rp.fillStyle(0xbdbdbd); rp.fillRect(12, 2, 28, 4)
-    rp.fillStyle(0xeeeeee); rp.fillRect(12, 2, 28, 1)   // top sharp edge
-    rp.fillStyle(0x888888); rp.fillRect(12, 5, 28, 1)   // bottom shadow
-    // Tip (tapered point)
-    rp.fillStyle(0xbdbdbd); rp.fillRect(40, 2, 2, 4)
-    rp.fillStyle(0xbdbdbd); rp.fillRect(42, 3, 1, 2)
-    // Blade sheen
-    rp.fillStyle(0xffffff, 0.55); rp.fillRect(14, 2, 12, 1)
-    rp.generateTexture('rapier', 43, 8); rp.destroy()
   }
 
   // ── scenery props ─────────────────────────────────────────────────────────────
@@ -1006,6 +1025,7 @@ export class BootScene extends Phaser.Scene {
     this.genCaveRock()
     this.genMagmaWall()
     this.genSciFiBackgrounds()
+    this.genCastleBackgrounds()
   }
 
   private genStationInterior() {
@@ -1831,6 +1851,260 @@ export class BootScene extends Phaser.Scene {
       gm.fillStyle(0x0a0406, 0.03); gm.fillRect(0, y, 512, 3)
     }
     gm.generateTexture('bg-bridge-glow', 512, 512); gm.destroy()
+  }
+
+  private genCastleBackgrounds() {
+    this.genGreatHall()
+    this.genDungeon()
+    this.genChapel()
+    this.genCrypt()
+    this.genSanctum()
+  }
+
+  private genGreatHall() {
+    const g = this.g()
+    g.fillStyle(0x1e1a30, 1); g.fillRect(0, 0, 512, 512)
+    // Offset brick rows
+    for (let row = 0; row < 11; row++) {
+      const by = row * 46
+      const off = (row % 2) * 28
+      for (let col = -1; col < 10; col++) {
+        const bx = col * 56 + off
+        g.fillStyle(row % 3 === 0 ? 0x302840 : 0x281e3a, 1)
+        g.fillRect(bx + 1, by + 1, 53, 43)
+        g.fillStyle(0x141020, 1); g.fillRect(bx, by, 56, 1); g.fillRect(bx, by, 1, 46)
+      }
+    }
+    // Gothic arched alcoves at 3 positions
+    for (const ax of [85, 255, 425]) {
+      g.fillStyle(0x08061a, 1); g.fillRect(ax - 42, 40, 84, 290) // deep space void
+      // Stars inside arch — bright and visible
+      for (let i = 0; i < 18; i++) {
+        const sx = ax - 36 + (i * 5 + i * i) % 72
+        const sy = 55 + (i * 19 + 7) % 265
+        g.fillStyle(0xffffff, 0.55 + (i % 4) * 0.12)
+        g.fillRect(sx, sy, 1 + (i % 2), 1 + (i % 2))
+      }
+      // Nebula tint in arch
+      g.fillStyle(0x220055, 0.25); g.fillRect(ax - 40, 42, 80, 140)
+      g.fillStyle(0x003366, 0.20); g.fillRect(ax - 40, 185, 80, 140)
+      // Stone arch frame
+      g.fillStyle(0x3a3258, 1)
+      g.fillRect(ax - 46, 36, 6, 298); g.fillRect(ax + 40, 36, 6, 298)
+      g.fillRect(ax - 44, 30, 88, 8)
+      g.fillRect(ax - 34, 22, 68, 9); g.fillRect(ax - 20, 15, 40, 8); g.fillRect(ax - 8, 10, 16, 6)
+    }
+    // Torch brackets
+    for (const tx of [170, 340]) {
+      g.fillStyle(0x5a3a10, 1); g.fillRect(tx - 5, 185, 10, 4); g.fillRect(tx - 3, 175, 6, 12)
+      g.fillStyle(0xff9900, 0.55); g.fillRect(tx - 14, 155, 28, 24)
+      g.fillStyle(0xffee44, 0.35); g.fillRect(tx - 8, 148, 16, 18)
+    }
+    // Floor stone band
+    g.fillStyle(0x28203c, 1); g.fillRect(0, 490, 512, 22)
+    g.fillStyle(0x160e28, 1); g.fillRect(0, 490, 512, 2)
+    g.generateTexture('bg-great-hall', 512, 512); g.destroy()
+
+    const gm = this.g()
+    gm.fillStyle(0x150e28, 0.55); gm.fillRect(0, 0, 512, 512)
+    for (const tx of [170, 340]) {
+      gm.fillStyle(0xff7700, 0.18); gm.fillRect(tx - 70, 130, 140, 110)
+      gm.fillStyle(0xffcc00, 0.12); gm.fillRect(tx - 45, 145, 90, 75)
+    }
+    gm.fillStyle(0x0a0420, 0.40); gm.fillRect(0, 370, 512, 142)
+    gm.generateTexture('bg-hall-glow', 512, 512); gm.destroy()
+  }
+
+  private genDungeon() {
+    const g = this.g()
+    g.fillStyle(0x10101e, 1); g.fillRect(0, 0, 512, 512)
+    // Heavy brick pattern
+    for (let row = 0; row < 14; row++) {
+      const by = row * 36; const off = (row % 2) * 30
+      for (let col = -1; col < 10; col++) {
+        const bx = col * 60 + off
+        g.fillStyle(0x221e32, 1); g.fillRect(bx + 1, by + 1, 57, 33)
+        g.fillStyle(0x0e0c1c, 1); g.fillRect(bx, by, 60, 1); g.fillRect(bx, by, 1, 36)
+      }
+    }
+    // Hanging chains
+    for (const cx of [64, 192, 320, 448]) {
+      for (let link = 0; link < 9; link++) {
+        const ly = link * 26 + 20
+        g.fillStyle(0x4a4460, 0.9); g.fillRect(cx - 3, ly, 6, 10); g.fillRect(cx - 5, ly + 10, 10, 5)
+      }
+    }
+    // Barred windows
+    for (const wx of [128, 384]) {
+      g.fillStyle(0x06041a, 1); g.fillRect(wx - 22, 195, 44, 82)
+      // Nebula glow behind bars
+      g.fillStyle(0x3300aa, 0.30); g.fillRect(wx - 20, 197, 40, 38)
+      g.fillStyle(0x0044aa, 0.25); g.fillRect(wx - 20, 235, 40, 40)
+      for (let i = 0; i < 8; i++) { // stars behind bars
+        g.fillStyle(0xffffff, 0.65); g.fillRect(wx - 16 + (i * 7) % 28, 206 + (i * 13) % 60, 1, 1)
+      }
+      for (let b = 0; b < 3; b++) { // bars
+        g.fillStyle(0x5a5470, 0.9); g.fillRect(wx - 18 + b * 20, 193, 3, 86)
+      }
+      g.fillStyle(0x2e2a44, 1) // bar frame
+      g.fillRect(wx - 24, 193, 6, 86); g.fillRect(wx + 18, 193, 6, 86)
+      g.fillRect(wx - 24, 191, 50, 5); g.fillRect(wx - 24, 277, 50, 5)
+    }
+    // Cosmic energy seeping through cracks
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle(0x4422aa, 0.15); g.fillRect(i * 86 + 30, 0, 6, 300 + (i * 37) % 180)
+    }
+    g.generateTexture('bg-dungeon', 512, 512); g.destroy()
+
+    const gm = this.g()
+    gm.fillStyle(0x0c0a1e, 0.60); gm.fillRect(0, 0, 512, 512)
+    for (let i = 0; i < 8; i++) {
+      gm.fillStyle(0x2830aa, 0.18); gm.fillRect(i * 64 + 16, 0, 10, 512)
+    }
+    gm.generateTexture('bg-dungeon-glow', 512, 512); gm.destroy()
+  }
+
+  private genChapel() {
+    const g = this.g()
+    g.fillStyle(0x1c1630, 1); g.fillRect(0, 0, 512, 512)
+    // Ribbed vault ceiling
+    for (let i = 0; i < 5; i++) {
+      const cx = i * 128
+      g.fillStyle(0x3a3260, 0.9); g.fillRect(cx - 3, 0, 5, 200); g.fillRect(cx - 42, 170, 84, 5)
+    }
+    // Tall gothic windows
+    for (const ax of [128, 384]) {
+      // Window void (deep space)
+      g.fillStyle(0x08041c, 1); g.fillRect(ax - 38, 25, 76, 295)
+      // Vibrant stained glass panels
+      const panes = [[0x5500cc,50,0x1100aa,70],[0x0022ee,60,0x2200cc,65],[0x4400aa,55,0x1144dd,65]]
+      let py = 35
+      for (const [c1,h1,c2,h2] of panes) {
+        g.fillStyle(c1, 0.80); g.fillRect(ax - 34, py, 30, h1)
+        g.fillStyle(c2, 0.80); g.fillRect(ax + 4, py, 30, h1)
+        py += h1 + 8
+        g.fillStyle(c2, 0.65); g.fillRect(ax - 34, py, 64, h2); py += h2 + 8
+      }
+      // Bright stars
+      for (let i = 0; i < 16; i++) {
+        g.fillStyle(0xffffff, 0.65 + (i % 4) * 0.09)
+        g.fillRect(ax - 32 + (i * 5 + i) % 64, 34 + (i * 23) % 270, 1, 1)
+      }
+      // Arch frame (stone)
+      g.fillStyle(0x3a3260, 1)
+      g.fillRect(ax - 42, 25, 5, 300); g.fillRect(ax + 37, 25, 5, 300)
+      g.fillRect(ax - 40, 20, 80, 6); g.fillRect(ax - 30, 14, 60, 7)
+      g.fillRect(ax - 18, 8, 36, 7); g.fillRect(ax - 8, 3, 16, 6)
+      // Mullion (center divider)
+      g.fillStyle(0x28224a, 0.9); g.fillRect(ax - 2, 40, 4, 276)
+    }
+    // Stone pillar bases
+    for (const px of [0, 256, 512]) {
+      g.fillStyle(0x2a2240, 1); g.fillRect(px - 18, 340, 36, 172)
+      g.fillStyle(0x3c3458, 0.8); g.fillRect(px - 20, 338, 40, 8)
+    }
+    // Candle glow at pillar bases
+    for (const cx of [64, 192, 320, 448]) {
+      g.fillStyle(0xffdd66, 0.22); g.fillRect(cx - 22, 445, 44, 55)
+    }
+    g.generateTexture('bg-chapel', 512, 512); g.destroy()
+
+    const gm = this.g()
+    gm.fillStyle(0x160e2c, 0.45); gm.fillRect(0, 0, 512, 512)
+    for (const ax of [128, 384]) {
+      gm.fillStyle(0x4400cc, 0.22); gm.fillRect(ax - 65, 15, 130, 330)
+      gm.fillStyle(0x8844ff, 0.12); gm.fillRect(ax - 45, 25, 90, 310)
+    }
+    gm.generateTexture('bg-chapel-glow', 512, 512); gm.destroy()
+  }
+
+  private genCrypt() {
+    const g = this.g()
+    g.fillStyle(0x0e0b1e, 1); g.fillRect(0, 0, 512, 512)
+    // Stone pillar columns
+    for (const px of [85, 256, 427]) {
+      g.fillStyle(0x201c30, 1); g.fillRect(px - 26, 0, 52, 512)
+      g.fillStyle(0x18162a, 0.7); g.fillRect(px - 22, 0, 3, 512)
+      g.fillStyle(0x2a2840, 0.6); g.fillRect(px - 18, 0, 7, 512)
+      // Column capitals
+      g.fillStyle(0x2e2a44, 1); g.fillRect(px - 32, 0, 64, 22); g.fillRect(px - 30, 22, 60, 10)
+      g.fillRect(px - 32, 490, 64, 22); g.fillRect(px - 30, 480, 60, 10)
+      // Cosmic energy veins on columns
+      g.fillStyle(0x6633bb, 0.20); g.fillRect(px - 8, 0, 3, 512)
+      // Skull ornaments
+      for (const sy of [120, 270, 400]) {
+        g.fillStyle(0x2c2a42, 1); g.fillRect(px - 13, sy, 26, 22); g.fillRect(px - 9, sy + 22, 18, 8)
+        g.fillStyle(0x080616, 1); g.fillRect(px - 10, sy + 5, 7, 7); g.fillRect(px + 3, sy + 5, 7, 7)
+        g.fillRect(px - 5, sy + 14, 10, 4)
+      }
+    }
+    // Space cracks glowing with cosmic energy
+    for (const crx of [170, 340]) {
+      g.fillStyle(0x8844ff, 0.35); g.fillRect(crx - 3, 0, 6, 90); g.fillRect(crx - 1, 0, 2, 65)
+      for (let i = 0; i < 8; i++) { g.fillStyle(0xffffff, 0.75); g.fillRect(crx - 1, 8 + i * 12, 1, 1) }
+    }
+    // Floor stone slabs
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle(0x1c1a2e, 0.8); g.fillRect(i * 64, 482, 62, 30)
+      g.fillStyle(0x0e0c20, 0.9); g.fillRect(i * 64, 482, 62, 1)
+    }
+    g.generateTexture('bg-crypt', 512, 512); g.destroy()
+
+    const gm = this.g()
+    gm.fillStyle(0x07051a, 0.65); gm.fillRect(0, 0, 512, 512)
+    for (const px of [85, 256, 427]) {
+      gm.fillStyle(0x220088, 0.30); gm.fillRect(px - 45, 0, 90, 512)
+    }
+    gm.generateTexture('bg-crypt-glow', 512, 512); gm.destroy()
+  }
+
+  private genSanctum() {
+    const g = this.g()
+    g.fillStyle(0x1a0a2e, 1); g.fillRect(0, 0, 512, 512)
+    // Large cosmic arch window
+    g.fillStyle(0x08041e, 1); g.fillRect(156, 40, 200, 240) // window void
+    // Vibrant nebula fill in window
+    g.fillStyle(0x440099, 0.92); g.fillRect(160, 44, 192, 50)
+    g.fillStyle(0x220070, 0.88); g.fillRect(156, 94, 200, 55)
+    g.fillStyle(0x5500bb, 0.85); g.fillRect(160, 149, 192, 50)
+    g.fillStyle(0x6600dd, 0.78); g.fillRect(164, 199, 184, 50)
+    g.fillStyle(0x4400aa, 0.82); g.fillRect(160, 249, 192, 26)
+    // Bright stars in window
+    const stars = [[20,15],[80,30],[140,20],[170,55],[30,80],[110,70],[165,95],[40,130],[100,120],[180,135],[25,175],[145,160],[70,200],[190,185],[55,220],[130,215]]
+    for (const [sx,sy] of stars) {
+      g.fillStyle(0xffffff, 0.70 + (sx % 5) * 0.07)
+      g.fillRect(160 + sx, 44 + sy, 1 + (sy % 2), 1 + (sy % 2))
+    }
+    // Golden arch frame
+    g.fillStyle(0x9c6a00, 1)
+    g.fillRect(150, 36, 8, 248); g.fillRect(354, 36, 8, 248)
+    g.fillRect(150, 34, 212, 8); g.fillRect(152, 278, 208, 8)
+    g.fillStyle(0xccaa00, 0.7); g.fillRect(150, 38, 4, 240) // shine
+    // Arch pointed top
+    g.fillStyle(0x9c6a00, 1)
+    g.fillRect(166, 26, 180, 8); g.fillRect(182, 19, 148, 8); g.fillRect(198, 13, 116, 7); g.fillRect(222, 7, 68, 7)
+    // Side columns
+    for (const px of [48, 464]) {
+      g.fillStyle(0x2e1e40, 1); g.fillRect(px - 30, 0, 60, 512)
+      g.fillStyle(0x9c6a00, 0.8); g.fillRect(px - 30, 0, 60, 14); g.fillRect(px - 30, 498, 60, 14); g.fillRect(px - 30, 250, 60, 8)
+      g.fillStyle(0x8844cc, 0.35); g.fillRect(px - 18, 14, 6, 484)
+    }
+    // Bright rune energy lines on floor
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle(0x8833ff, 0.45); g.fillRect(0, 385 + i * 18, 512, 5)
+    }
+    // Bright energy orbs
+    for (const ox of [150, 256, 362]) {
+      g.fillStyle(0xaa44ff, 0.55); g.fillRect(ox - 14, 355, 28, 28)
+      g.fillStyle(0xcc88ff, 0.30); g.fillRect(ox - 22, 347, 44, 44)
+    }
+    g.generateTexture('bg-sanctum', 512, 512); g.destroy()
+
+    const gm = this.g()
+    gm.fillStyle(0x0e0530, 0.50); gm.fillRect(0, 0, 512, 512)
+    gm.fillStyle(0x5500cc, 0.22); gm.fillRect(100, 20, 312, 320)
+    gm.fillStyle(0x9933ff, 0.12); gm.fillRect(60, 0, 392, 400)
+    gm.generateTexture('bg-sanctum-glow', 512, 512); gm.destroy()
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────────

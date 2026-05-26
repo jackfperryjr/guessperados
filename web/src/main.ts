@@ -5,8 +5,10 @@ import { IntroScene } from './scenes/IntroScene'
 import { MenuScene } from './scenes/MenuScene'
 import { GameScene } from './scenes/GameScene'
 import { VictoryScene } from './scenes/VictoryScene'
+import { GameOverScene } from './scenes/GameOverScene'
 import { LevelCompleteScene } from './scenes/LevelCompleteScene'
 import { LobbyScene } from './scenes/LobbyScene'
+import { CharacterSelectScene } from './scenes/CharacterSelectScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -25,7 +27,7 @@ const config: Phaser.Types.Core.GameConfig = {
   input: {
     gamepad: true,
   },
-  scene: [BootScene, IntroScene, MenuScene, GameScene, VictoryScene, LevelCompleteScene, LobbyScene],
+  scene: [BootScene, IntroScene, MenuScene, CharacterSelectScene, GameScene, VictoryScene, GameOverScene, LevelCompleteScene, LobbyScene],
 }
 
 // iOS/Safari requires a user gesture before the Gamepad API and AudioContext

@@ -12,18 +12,18 @@ const ATTACK_INTERVAL: Record<AbilityType, number> = {
 }
 
 const ENEMY_SHEET: Record<AbilityType, string> = {
-  [AbilityType.None]:     'sheet-enemy-pinklady',
-  [AbilityType.Fire]:     'sheet-enemy-dragon',
-  [AbilityType.Electric]: 'sheet-enemy-duckbot',
-  [AbilityType.Ice]:      'sheet-enemy-troomba',
+  [AbilityType.None]:     'sheet-enemy-mom',
+  [AbilityType.Fire]:     'sheet-enemy-zombie',
+  [AbilityType.Electric]: 'sheet-enemy-skeleton',
+  [AbilityType.Ice]:      'sheet-enemy-duck',
 }
 
-// Physics body size per enemy type (w, h) — kept narrow like the player's 26×30
+// Physics body size per enemy type (w, h) — sized for 128px sprites at 0.6 scale (~77px display)
 const ENEMY_BODY: Record<AbilityType, [number, number]> = {
-  [AbilityType.None]:     [26, 30],
-  [AbilityType.Fire]:     [30, 34],
-  [AbilityType.Electric]: [26, 32],
-  [AbilityType.Ice]:      [28, 32],
+  [AbilityType.None]:     [44, 50],   // mom — Boss.ts overrides this
+  [AbilityType.Fire]:     [38, 50],   // zombie
+  [AbilityType.Electric]: [38, 50],   // dad
+  [AbilityType.Ice]:      [40, 34],   // duck (flying, wider than tall)
 }
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
@@ -33,12 +33,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private beingPulled = false
   private readonly animKey: string
   private attackTimer: number
+  protected hp = 3
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
-    const isFlying = ability === AbilityType.Fire
+    const isFlying = ability === AbilityType.Ice
     const sheetKey = ENEMY_SHEET[ability]
-    const spawnY   = isFlying ? Math.min(y, 340) : y
-    super(scene, x, spawnY, sheetKey)
+    super(scene, x, y, sheetKey)
     this.abilityType = ability
     this.flying = isFlying
     this.animKey = sheetKey
@@ -47,12 +47,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
-    if (ability === AbilityType.None) this.setScale(84 / 128)
+    if (ability !== AbilityType.None) this.setScale(1.55)  // 64px frame → ~99px display
 
     const [bw, bh] = ENEMY_BODY[ability]
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(true)
-    body.setSize(bw, bh)
+    body.setSize(bw, bh, false)
+    body.setOffset((this.displayWidth - bw) / 2, Math.round(this.displayHeight * 0.12))
     if (isFlying) body.setAllowGravity(false)
 
     this.play(`${this.animKey}-walk`)
@@ -114,6 +115,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   stun(_ms: number) {
     ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
+  }
+
+  hit() {
+    if (this.hp <= 0) return
+    this.hp--
+    if (this.hp <= 0) { this.die(); return }
+    this.setTint(0xffffff)
+    this.scene.time.delayedCall(120, () => { if (this.active) this.clearTint() })
   }
 
   die() {
