@@ -153,7 +153,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('proj-fire',      'assets/projectiles/fireball.png')
     this.load.image('proj-ice',       'assets/projectiles/icecycle.png')
     this.load.image('proj-lightning', 'assets/projectiles/lightningbolt.png')
-    this.load.image('logo', 'assets/friendsslaythedragon.jpg')
+    this.load.image('logo', 'assets/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
     this.load.image('tileset', 'tileset/one/spritesheet.png')

@@ -1,39 +1,36 @@
 import Phaser from 'phaser'
 
-const FONT      = '"Press Start 2P", monospace'
-const FADE_MS   = 600
-const HOLD_MS   = 1400
-const SLIDE_MS  = FADE_MS + HOLD_MS + FADE_MS + 200   // total time per slide
-
-interface Slide {
-  label: string
-  name: string
-  nameColor: string
-  sub?: string
-}
-
-const SLIDES: Slide[] = [
-  { label: 'PRODUCED BY',  name: 'JACK',      nameColor: '#ffe066' },
-  { label: 'INSPIRED BY',  name: 'HIS KIDS',  nameColor: '#ff80ab' },
-  { label: 'DEVELOPED BY', name: 'CLAUDE',    nameColor: '#80d8ff', sub: '( AN ANTHROPIC AI )' },
-]
+const FONT    = '"Press Start 2P", monospace'
+const FADE_MS = 600
+const HOLD_MS = 1600
+const SLIDE_MS = FADE_MS + HOLD_MS + FADE_MS + 200
 
 export class IntroScene extends Phaser.Scene {
   private skipped = false
 
   constructor() { super({ key: 'IntroScene' }) }
 
+  preload() {
+    this.load.image('intro-jack',   'assets/jack.png')
+    this.load.image('intro-carter', 'assets/gifs/carter.gif')
+    this.load.image('intro-callum', 'assets/gifs/callum.gif')
+    this.load.image('intro-conrad', 'assets/gifs/conrad.gif')
+  }
+
   create() {
     this.cameras.main.setBackgroundColor('#000000')
     this.cameras.main.fadeIn(500, 0, 0, 0)
     this.skipped = false
 
-    // Any input skips straight to the menu
     this.input.once('pointerdown',  () => this.skip())
     this.input.keyboard?.once('keydown', () => this.skip())
     this.input.gamepad?.once(Phaser.Input.Gamepad.Events.BUTTON_DOWN, () => this.skip())
 
-    this.runSlideshow()
+    let t = 300
+    this.scheduleProducedBy(t);  t += SLIDE_MS
+    this.scheduleInspiredBy(t);  t += SLIDE_MS
+    this.scheduleDevelopedBy(t); t += SLIDE_MS
+    this.time.delayedCall(t + 100, () => { if (!this.skipped) this.toMenu() })
   }
 
   private skip() {
@@ -49,53 +46,143 @@ export class IntroScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'))
   }
 
-  private runSlideshow() {
-    let t = 300
-    for (const slide of SLIDES) {
-      this.scheduleSlide(slide, t)
-      t += SLIDE_MS
-    }
-    this.time.delayedCall(t + 100, () => { if (!this.skipped) this.toMenu() })
-  }
+  // ── slide 1: produced by jack ────────────────────────────────────────────────
 
-  private scheduleSlide(slide: Slide, startAt: number) {
+  private scheduleProducedBy(startAt: number) {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
 
-    const label = this.add.text(cx, cy - 50, slide.label, {
-      fontSize: '11px', fontFamily: FONT, color: '#556677', letterSpacing: 8,
-    }).setOrigin(0.5).setAlpha(0)
+    const label = this.label(cx, cy - 90, 'PRODUCED BY')
 
-    const name = this.add.text(cx, cy + 16, slide.name, {
-      fontSize: '46px', fontFamily: FONT, color: slide.nameColor,
+    const jackImg = this.textures.exists('intro-jack')
+      ? this.add.image(cx, cy + 4, 'intro-jack').setDisplaySize(110, 110).setAlpha(0)
+      : null
+
+    const nameText = this.add.text(cx, cy + 72, 'JACK', {
+      fontSize: '18px', fontFamily: FONT, color: '#ffe066',
+      stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setAlpha(0).setScale(0.7)
+
+    const [lineL, lineR] = this.lines(cx, cy - 90)
+    const objs = [label, nameText, ...(jackImg ? [jackImg] : [])]
+
+    this.animSlide(startAt, objs, [lineL, lineR], nameText)
+  }
+
+  // ── slide 2: inspired by his kids ────────────────────────────────────────────
+
+  private scheduleInspiredBy(startAt: number) {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    const label = this.label(cx, cy - 80, 'INSPIRED BY')
+
+    const nameText = this.add.text(cx, cy - 30, 'HIS KIDS', {
+      fontSize: '22px', fontFamily: FONT, color: '#ff80ab',
+      stroke: '#000000', strokeThickness: 6,
+    }).setOrigin(0.5).setAlpha(0).setScale(0.7)
+
+    const imgSize = 88
+    const spacing = 108
+    const imgsY   = cy + 44
+    const kidObjs: Phaser.GameObjects.Image[] = []
+    for (const [key, x] of [
+      ['intro-carter', cx - spacing],
+      ['intro-callum', cx],
+      ['intro-conrad', cx + spacing],
+    ] as [string, number][]) {
+      if (this.textures.exists(key)) {
+        kidObjs.push(this.add.image(x, imgsY, key).setDisplaySize(imgSize, imgSize).setAlpha(0))
+      }
+    }
+
+    const [lineL, lineR] = this.lines(cx, cy - 80)
+    const objs = [label, nameText, ...kidObjs]
+
+    this.animSlide(startAt, objs, [lineL, lineR], nameText)
+  }
+
+  // ── slide 3: developed by claude ─────────────────────────────────────────────
+
+  private scheduleDevelopedBy(startAt: number) {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    const label = this.label(cx, cy - 50, 'DEVELOPED BY')
+
+    const name = this.add.text(cx, cy + 16, 'CLAUDE', {
+      fontSize: '46px', fontFamily: FONT, color: '#80d8ff',
       stroke: '#000000', strokeThickness: 10,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
 
-    const objs: Phaser.GameObjects.GameObject[] = [label, name]
+    const sub = this.add.text(cx, cy + 80, '( AN ANTHROPIC AI )', {
+      fontSize: '9px', fontFamily: FONT, color: '#445566',
+    }).setOrigin(0.5).setAlpha(0)
 
-    if (slide.sub) {
-      objs.push(this.add.text(cx, cy + 80, slide.sub, {
-        fontSize: '9px', fontFamily: FONT, color: '#445566',
-      }).setOrigin(0.5).setAlpha(0))
-    }
+    const splatL = this.makeSplat(cx - 172, cy + 16)
+    const splatR = this.makeSplat(cx + 172, cy + 16)
+    splatL.setAlpha(0)
+    splatR.setAlpha(0)
 
-    // Thin separator lines flanking the label
-    const lineL = this.add.rectangle(cx - 220, cy - 50, 160, 1, 0x334455, 0).setOrigin(0.5)
-    const lineR = this.add.rectangle(cx + 220, cy - 50, 160, 1, 0x334455, 0).setOrigin(0.5)
+    const [lineL, lineR] = this.lines(cx, cy - 50)
+    const objs = [label, name, sub, splatL, splatR]
 
+    this.animSlide(startAt, objs, [lineL, lineR], name)
+  }
+
+  // ── shared helpers ────────────────────────────────────────────────────────────
+
+  private label(x: number, y: number, text: string) {
+    return this.add.text(x, y, text, {
+      fontSize: '11px', fontFamily: FONT, color: '#556677', letterSpacing: 8,
+    }).setOrigin(0.5).setAlpha(0)
+  }
+
+  private lines(cx: number, y: number): [Phaser.GameObjects.Rectangle, Phaser.GameObjects.Rectangle] {
+    return [
+      this.add.rectangle(cx - 220, y, 160, 1, 0x334455, 0).setOrigin(0.5),
+      this.add.rectangle(cx + 220, y, 160, 1, 0x334455, 0).setOrigin(0.5),
+    ]
+  }
+
+  private animSlide(
+    startAt: number,
+    objs: Phaser.GameObjects.GameObject[],
+    lines: Phaser.GameObjects.Rectangle[],
+    scaleTarget: Phaser.GameObjects.Text,
+  ) {
     this.time.delayedCall(startAt, () => {
       if (this.skipped) return
-
-      this.tweens.add({ targets: objs,           alpha: 1,          duration: FADE_MS })
-      this.tweens.add({ targets: [lineL, lineR], alpha: 0.6,        duration: FADE_MS + 200 })
-      this.tweens.add({ targets: name,           scaleX: 1, scaleY: 1,
-        duration: FADE_MS + 80, ease: 'Back.Out' })
-
+      this.tweens.add({ targets: objs,  alpha: 1,   duration: FADE_MS })
+      this.tweens.add({ targets: lines, alpha: 0.6, duration: FADE_MS + 200 })
+      this.tweens.add({ targets: scaleTarget, scaleX: 1, scaleY: 1, duration: FADE_MS + 80, ease: 'Back.Out' })
       this.time.delayedCall(FADE_MS + HOLD_MS, () => {
         if (this.skipped) return
-        this.tweens.add({ targets: [...objs, lineL, lineR], alpha: 0, duration: FADE_MS })
+        this.tweens.add({ targets: [...objs, ...lines], alpha: 0, duration: FADE_MS })
       })
     })
   }
 
+  private makeSplat(x: number, y: number): Phaser.GameObjects.Graphics {
+    const col = 0x80d8ff
+    const g = this.add.graphics()
+    g.setPosition(x, y)
+    g.lineStyle(2, col, 0.9)
+    g.fillStyle(col, 1)
+    const rays = 8
+    const outer = 22
+    const inner = 4
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2
+      const midA = a + Math.PI / rays
+      g.beginPath()
+      g.moveTo(Math.cos(a) * inner, Math.sin(a) * inner)
+      g.lineTo(Math.cos(a) * outer, Math.sin(a) * outer)
+      g.lineTo(Math.cos(midA) * (outer * 0.45), Math.sin(midA) * (outer * 0.45))
+      g.closePath()
+      g.fillPath()
+    }
+    g.fillCircle(0, 0, inner + 1)
+    return g
+  }
 }
