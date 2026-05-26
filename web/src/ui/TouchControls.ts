@@ -15,7 +15,6 @@ export class TouchControls {
   private jumpHeld     = false
   private inhaleHeld   = false
   private abilityJust  = false
-  private rapierJust   = false
 
   private _enabled = true
   private _allObjects: (Phaser.GameObjects.Arc | Phaser.GameObjects.Text)[] = []
@@ -38,7 +37,6 @@ export class TouchControls {
       this.jumpHeld = false
       this.inhaleHeld = false
       this.abilityJust = false
-      this.rapierJust = false
       this.stickPointerId = null
       this.base.setVisible(false)
       this.thumb.setVisible(false)
@@ -51,7 +49,6 @@ export class TouchControls {
     const by = height - 65
 
     this.btn(bx,       by,       '▲', 0x4fc3f7, () => { this.jumpHeld = true },   () => { this.jumpHeld = false })
-    this.btn(bx - 70,  by,       '⚔', 0xff8a65, () => { this.rapierJust  = true })
     this.btn(bx,       by - 70,  'X',  0xa5d6a7, () => { this.abilityJust = true })
     this.btn(bx - 70,  by - 70,  'Z',  0xce93d8, () => { this.inhaleHeld = true }, () => { this.inhaleHeld = false })
   }
@@ -118,7 +115,6 @@ export class TouchControls {
 
     player.setInhaling(this.inhaleHeld)
     if (this.abilityJust) { player.useAbility(); this.abilityJust = false }
-    if (this.rapierJust)  { player.useRapier();  this.rapierJust  = false }
   }
 
   destroy() {

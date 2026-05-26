@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Guessperados</title>
+    <title>Friends Slay the Dragon</title>
     <link rel="icon" type="image/jpeg" href="public/favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,6 +26,11 @@
   </head>
   <body>
     <div id="game-container"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()))
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

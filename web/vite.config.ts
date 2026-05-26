@@ -6,12 +6,13 @@ export default defineConfig({
   build: { target: 'esnext' },
   plugins: [
     VitePWA({
+      devOptions: { enabled: false },
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png'],
       manifest: {
-        name: 'Guessperados',
-        short_name: 'Guessperados',
-        description: 'Guessperados — local co-op action for 2 players',
+        name: 'Friends Slay the Dragon',
+        short_name: 'Friends Slay the Dragon',
+        description: 'Friends Slay the Dragon — local co-op action for 2+ players',
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
         display: 'standalone',

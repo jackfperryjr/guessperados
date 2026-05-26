@@ -370,7 +370,7 @@ export class LobbyScene extends Phaser.Scene {
       this.registry.set('lives',          3)
       this.registry.set('score',          0)
       this.cameras.main.fadeOut(400, 0, 0, 0)
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
     }
 
     this.nm.onError = (text) => {

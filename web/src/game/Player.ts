@@ -33,32 +33,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private isFloating    = false
   private isInhaling    = false
   private invincible    = false
+  private isMeleeing    = false
   private inhaledObject: Phaser.Physics.Arcade.Sprite | null = null
   private animPrefix: string | null = null
-  private rapierSprite: Phaser.GameObjects.Image | null = null
-  private isSwinging = false
 
   constructor(scene: Phaser.Scene, x: number, y: number, id: number) {
-    const sheetKey = BootScene.getSheetKey(id)
-    const useSheet = sheetKey !== null && scene.textures.exists(sheetKey)
-    const textureKey = useSheet ? sheetKey! : BootScene.getFallbackTexture(id)
+    const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
+    const charKey = selectedChars?.[id]
+    let resolvedSheet: string | null = null
+    let resolvedPrefix: string | null = null
+    if (charKey && scene.textures.exists(`sheet-${charKey}`)) {
+      resolvedSheet = `sheet-${charKey}`
+      resolvedPrefix = `char-${charKey}`
+    } else {
+      const defaultSheet = BootScene.getSheetKey(id)
+      if (defaultSheet && scene.textures.exists(defaultSheet)) {
+        resolvedSheet  = defaultSheet
+        resolvedPrefix = BootScene.getAnimPrefix(id)
+      }
+    }
+    const textureKey = resolvedSheet ?? BootScene.getFallbackTexture(id)
     super(scene, x, y, textureKey)
     this.playerId = id
-    this.animPrefix = useSheet ? BootScene.getAnimPrefix(id) : null
+    this.animPrefix = resolvedPrefix
 
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
+    this.setScale(1.15)  // 64px frame → ~74px display
+
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(false)
-    body.setSize(26, 30)
+    body.setSize(28, 40, false)
+    body.setOffset(18, 20)
 
-    if (scene.textures.exists('rapier')) {
-      this.rapierSprite = scene.add.image(x - 3, y + 13, 'rapier')
-        .setOrigin(0.15, 0.5)
-        .setDepth(1)
-        .setVisible(false)
-    }
   }
 
   // ── movement ────────────────────────────────────────────────────────────────
@@ -101,10 +109,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update() {
-    if (!this.isAlive || this.isInhaled) {
-      this.rapierSprite?.setVisible(false)
-      return
-    }
+    if (!this.isAlive || this.isInhaled) return
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setGravityY(this.isFloating ? FLOAT_GRAVITY : 0)
     if (body.blocked.down) this.isFloating = false
@@ -114,23 +119,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     this.updateAnimation()
-    this.updateRapierSprite()
-  }
-
-  private updateRapierSprite() {
-    if (!this.rapierSprite) return
-    if (this.hasInhaled || this.isInhaling) {
-      this.rapierSprite.setVisible(false)
-      return
-    }
-    const facingRight = !this.flipX
-    const dir = facingRight ? 1 : -1
-    this.rapierSprite
-      .setPosition(this.x + dir * 2 - 5, this.y + 13)
-      .setVisible(true)
-    if (!this.isSwinging) {
-      this.rapierSprite.setAngle(facingRight ? -20 : 200)
-    }
   }
 
   private updateAnimation() {
@@ -139,7 +127,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const vx = Math.abs(body.velocity.x)
 
     let anim: string
-    if (this.hasInhaled)         anim = 'puffed'
+    if (this.isMeleeing)         anim = 'melee'
+    else if (this.hasInhaled)    anim = 'puffed'
     else if (this.isInhaling)    anim = 'inhale'
     else if (this.isFloating)    anim = 'float'
     else if (!body.blocked.down && body.velocity.y > 80) anim = 'fall'
@@ -231,27 +220,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  useRapier() {
-    this.emit('rapierSwing', this)
-    this.swingRapierSprite()
-  }
-
-  private swingRapierSprite() {
-    if (!this.rapierSprite || this.isSwinging) return
-    this.isSwinging = true
-    const facingRight = !this.flipX
-    const baseAngle = facingRight ? -20 : 200
-    this.rapierSprite.setAngle(baseAngle - 65)
-    this.scene.tweens.add({
-      targets: this.rapierSprite,
-      angle: baseAngle + 65,
-      duration: 160,
-      ease: 'Power1',
-      onComplete: () => {
-        this.isSwinging = false
-        this.rapierSprite?.setAngle(baseAngle)
-      },
-    })
+  swingMelee() {
+    if (this.isMeleeing || !this.isAlive || this.isInhaled) return
+    this.isMeleeing = true
+    this.emit('useMelee', this)
+    this.scene.time.delayedCall(350, () => { if (this.active) this.isMeleeing = false })
   }
 
   // ── damage ──────────────────────────────────────────────────────────────────
@@ -278,8 +251,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   takeDamage(_amount: number, _type: DamageType) { this.hitByEnemy() }
 
   destroy(fromScene?: boolean) {
-    this.rapierSprite?.destroy()
-    this.rapierSprite = null
     super.destroy(fromScene)
   }
 

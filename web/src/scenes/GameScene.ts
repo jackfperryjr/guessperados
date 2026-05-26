@@ -9,7 +9,6 @@ import { TouchControls } from '../ui/TouchControls'
 import { RoomConfig, ExitDir, generateRun } from '../levels'
 import { AbilityType, DamageType } from '../types'
 import { ItemSpawn } from '../levels'
-import { ABILITY_COLORS } from '../ui/UIManager'
 import { ABILITY_AMMO } from '../game/Player'
 import { NetworkManager, RemoteInput } from '../network/NetworkManager'
 import { SoundManager } from '../audio/SoundManager'
@@ -20,8 +19,8 @@ const SCORE_ENEMY = 200
 const SCORE_DESTRUCT = 100
 
 const KEYBOARD_CONFIGS: Record<string, string>[] = [
-  { left: 'A',    right: 'D',     jump: 'W',  inhale: 'C',     ability: 'X', rapier: 'Z' },
-  { left: 'LEFT', right: 'RIGHT', jump: 'UP', inhale: 'COMMA', ability: 'L', rapier: 'K' },
+  { left: 'A',    right: 'D',     jump: 'W',  inhale: 'C',     ability: 'X' },
+  { left: 'LEFT', right: 'RIGHT', jump: 'UP', inhale: 'COMMA', ability: 'L' },
 ]
 
 const OPPOSITE: Record<ExitDir, ExitDir> = { left:'right', right:'left', top:'bottom', bottom:'top' }
@@ -58,6 +57,8 @@ export class GameScene extends Phaser.Scene {
   private bgLayers: Phaser.GameObjects.TileSprite[] = []
   private throneLabel: Phaser.GameObjects.Text | null = null
   private throneX = 0
+  private bossPortalPos: { x: number; y: number } | null = null
+  private portalLabel: Phaser.GameObjects.Text | null = null
   private roomTransitioning = false
   private bossDefeated = false
   private bossRoomLeftWall: Phaser.GameObjects.TileSprite | null = null
@@ -67,12 +68,14 @@ export class GameScene extends Phaser.Scene {
 
   private collectibleSprites: Phaser.GameObjects.Image[] = []
   private inhaleGraphics: Phaser.GameObjects.Graphics[] = []
+  private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
 
   private playerKeysets = new Map<number, Record<string, Phaser.Input.Keyboard.Key>>()
   private touchControls: TouchControls | null = null
   private pauseContainer!: Phaser.GameObjects.Container
   private score = 0
   private _lastPadConnected = false
+  private _debugLogTimer = 0
 
   private nm: NetworkManager | null = null
   private localPlayerId = 0
@@ -83,6 +86,7 @@ export class GameScene extends Phaser.Scene {
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.inhaleGraphics = []
+    this.tilemapLayers = []
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
     this.nm = null
@@ -90,6 +94,8 @@ export class GameScene extends Phaser.Scene {
     this.boss = null
     this.throneLabel = null
     this.throneX = 0
+    this.bossPortalPos = null
+    this.portalLabel = null
     this.roomTransitioning = false
     this.bossDefeated = false
     this.bossRoomLeftWall = null
@@ -97,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseFocusIdx = 0
     this.pauseCursor = null
     this._lastPadConnected = false
+    this._debugLogTimer = 0
   }
 
   create() {
@@ -129,8 +136,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     const W = this.cfg.worldWidth
-    this.physics.world.setBounds(-100, -100, W + 200, 920)
-    this.cameras.main.setBounds(0, 0, W, 720)
+    const H = this.cfg.worldHeight ?? 720
+    this.physics.world.setBounds(-100, -100, W + 200, H + 200)
+    this.cameras.main.setBounds(0, 0, W, H)
     this.cameras.main.setRoundPixels(true)
 
     this.buildBackground()
@@ -187,6 +195,19 @@ export class GameScene extends Phaser.Scene {
   private buildBackground() {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
+    const W = this.cfg.worldWidth
+
+    if (this.cfg.worldMap) return  // tilemap layers serve as background
+
+    if (this.cfg.roomImage) {
+      this.add.image(W / 2, 360, this.cfg.roomImage)
+        .setDisplaySize(W, 720).setDepth(-2)
+      this.bgLayers.push(
+        this.add.tileSprite(cx, cy, width, height, this.cfg.bgMid)
+          .setScrollFactor(0).setAlpha(0.20),
+      )
+      return
+    }
 
     this.bgLayers.push(
       this.add.tileSprite(cx, cy, width, height, this.cfg.bgFar).setScrollFactor(0),
@@ -206,368 +227,404 @@ export class GameScene extends Phaser.Scene {
 
   private buildScenery() {
     const w = this.cfg.worldWidth
-    if (this.cfg.isBossRoom)  { this.buildSceneryArmory(w);      return }
-    if (this.cfg.isThrone)    { this.buildSceneryCommand(w);     return }
-    if (this.cfg.isTutorial)  { this.buildSceneryCommand(w);     return }
+    if (this.cfg.worldMap)  { return }
+    if (this.cfg.roomImage) { return }
+    if (this.cfg.isBossRoom) { this.buildSceneryThrone(w); return }
+    if (this.cfg.isThrone)   { this.buildSceneryThrone(w); return }
+    if (this.cfg.isTutorial) { this.buildSceneryHall(w);   return }
     const hash = this.cfg.name.split('').reduce((s, c) => s + c.charCodeAt(0), 0)
     switch (hash % 5) {
-      case 0: this.buildSceneryCommand(w);     break
-      case 1: this.buildSceneryEngineering(w); break
-      case 2: this.buildSceneryCargo(w);       break
-      case 3: this.buildSceneryLab(w);         break
-      default: this.buildSceneryArmory(w);     break
+      case 0: this.buildSceneryHall(w);    break
+      case 1: this.buildSceneryDungeon(w); break
+      case 2: this.buildSceneryCrypt(w);   break
+      case 3: this.buildSceneryChapel(w);  break
+      default: this.buildSceneryArmory(w); break
     }
   }
 
-  // ── Command Deck — blue, viewscreens, console desks, cable drops ─────────────
-  private buildSceneryCommand(w: number) {
-    // Ambient tint
-    this.add.rectangle(w / 2, 360, w, 720, 0x00050f, 0.28).setDepth(2)
+  // ── Great Hall — warm stone, pillars, torches, hanging banners ────────────────
+  private buildSceneryHall(w: number) {
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x0f0800, 0.30).setDepth(2)
 
-    // Ceiling: LED strip lights
-    const strips = Math.ceil(w / 210)
-    for (let i = 0; i < strips; i++) {
-      const sx = 105 + i * 210
-      const strip = this.add.rectangle(sx, 10, 170, 7, 0x99ccff, 0.85).setDepth(3)
-      this.add.rectangle(sx, 18, 150, 16, 0x3366aa, 0.12).setDepth(2)
-      this.tweens.add({ targets: strip, alpha: 0.55, duration: 1600 + (sx % 800), yoyo: true, repeat: -1 })
+    // Stone pillars
+    const pillars = Math.max(3, Math.floor(w / 280))
+    for (let i = 0; i < pillars; i++) {
+      const px = 160 + i * (w / pillars)
+      this.add.rectangle(px, 360, 28, 720, 0x1a1208, 0.85).setDepth(3)
+      this.add.rectangle(px, 360, 22, 720, 0x221a0e, 0.6).setDepth(3)
+      this.add.rectangle(px, 14,  44, 14, 0x2a2010, 0.9).setDepth(4)
+      this.add.rectangle(px, 686, 44, 14, 0x2a2010, 0.9).setDepth(4)
     }
 
-    // Wall: galaxy viewscreens as focal points
-    const screenXs = w > 1400
-      ? [w * 0.2, w * 0.5, w * 0.8]
-      : [w * 0.28, w * 0.72]
-    const screenYs = [260, 320, 270]
-    screenXs.forEach((sx, i) => {
-      this.add.image(sx, screenYs[i % screenYs.length], 'scn-viewscreen').setAlpha(0.82).setDepth(3)
-      this.add.rectangle(sx, screenYs[i % screenYs.length], 260, 150, 0x001433, 0.18).setDepth(2)
-    })
-
-    // Wall: porthole viewports at lower positions
-    const vpCount = Math.max(2, Math.floor(w / 520))
-    for (let i = 0; i < vpCount; i++) {
-      const vx = 230 + i * (w / vpCount)
-      const vy = 500
-      const vp = this.add.image(vx, vy, 'scn-viewport').setAlpha(0.75).setDepth(3)
-      this.tweens.add({ targets: vp, alpha: 0.5, duration: 2500 + (vx % 900), yoyo: true, repeat: -1 })
+    // Wall torches
+    const torches = Math.max(2, Math.floor(w / 360))
+    for (let i = 0; i < torches; i++) {
+      const tx = 200 + i * (w / torches)
+      this.add.rectangle(tx, 200, 8, 30, 0x4a3820, 0.9).setDepth(4)
+      this.add.rectangle(tx, 185, 12, 8, 0x5a4828, 0.9).setDepth(4)
+      const flame = this.add.rectangle(tx, 176, 16, 20, 0xff8800, 0.85).setDepth(5)
+      const glow  = this.add.rectangle(tx, 176, 48, 80, 0xff6600, 0.10).setDepth(4)
+      this.tweens.add({ targets: flame, scaleY: 0.7, scaleX: 0.8, alpha: 0.6, duration: 150 + (tx % 120), yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.04, duration: 200 + (tx % 150), yoyo: true, repeat: -1 })
     }
 
-    // Ceiling: hanging cable bundles
-    const cables = Math.ceil(w / 170)
-    for (let i = 0; i < cables; i++) {
-      const cx = 55 + i * (w / cables) + (i % 3 - 1) * 18
-      const h = 70 + (i % 4) * 22
-      this.add.rectangle(cx,     h / 2, 3, h, 0x223344, 0.65).setDepth(3)
-      this.add.rectangle(cx + 7, h / 2 + 12, 2, h - 24, 0x1a2a38, 0.45).setDepth(3)
+    // Hanging banners
+    const banners = Math.max(2, Math.floor(w / 400))
+    for (let i = 0; i < banners; i++) {
+      const bx = 220 + i * (w / banners)
+      this.add.rectangle(bx, 120, 36, 180, 0x4a0808, 0.85).setDepth(3)
+      this.add.rectangle(bx, 120, 12, 180, 0x660a0a, 0.6).setDepth(3)
+      this.add.rectangle(bx,  90, 36, 10, 0xcc8800, 0.7).setDepth(4)
+      this.add.rectangle(bx, 210, 36, 10, 0xcc8800, 0.7).setDepth(4)
     }
 
-    // Floor: console desks
-    const desks = Math.ceil(w / 380)
-    for (let i = 0; i < desks; i++) {
-      const dx = 140 + i * (w / desks) + (i % 2) * 60 - 30
-      this.add.image(dx, 636, 'scn-console-unit').setAlpha(0.88).setDepth(4)
+    // Floor flagstones
+    const tiles = Math.ceil(w / 80)
+    for (let i = 0; i < tiles; i++) {
+      if (i % 2 === 0) this.add.rectangle(40 + i * 80, 686, 78, 28, 0x1a1208, 0.4).setDepth(2)
     }
 
-    // Vertical status columns with blinking LEDs
-    const cols = Math.max(2, Math.floor(w / 600))
-    for (let i = 0; i < cols; i++) {
-      const cx = 280 + i * (w / cols)
-      this.add.rectangle(cx, 410, 10, 90, 0x182840, 0.9).setDepth(3)
-      const ledColors = [0x00ff55, 0xffcc00, 0x00aaff, 0xff5500, 0x00ff55, 0xffcc00]
-      ledColors.forEach((col, j) => {
-        const led = this.add.rectangle(cx, 370 + j * 14, 6, 6, col, 0.9).setDepth(4)
-        this.tweens.add({ targets: led, alpha: 0.15, duration: 280 + j * 120 + (cx % 300), yoyo: true, repeat: -1 })
+    // Ceiling arches between pillars
+    for (let i = 0; i < pillars - 1; i++) {
+      const ax = 160 + i * (w / pillars) + (w / pillars) / 2
+      this.add.rectangle(ax, 12, w / pillars - 30, 18, 0x221a0e, 0.7).setDepth(3)
+    }
+  }
+
+  // ── Dungeon — chains, iron bars, dripping water, skull motifs ────────────────
+  private buildSceneryDungeon(w: number) {
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x040408, 0.38).setDepth(2)
+
+    // Ceiling chains
+    const chains = Math.ceil(w / 220)
+    for (let i = 0; i < chains; i++) {
+      const cx = 110 + i * 220 + (i % 3 - 1) * 20
+      const ch = 60 + (i % 4) * 28
+      for (let j = 0; j < Math.floor(ch / 8); j++) {
+        this.add.rectangle(cx + (j % 2 === 0 ? 0 : 2), 8 + j * 8, j % 2 === 0 ? 5 : 7, 7, 0x3a3a3a, 0.9).setDepth(3)
+      }
+      this.add.rectangle(cx, 10 + ch, 12, 8, 0x4a4a4a, 0.9).setDepth(4)
+    }
+
+    // Iron bar sections
+    const barGroups = Math.max(2, Math.floor(w / 480))
+    for (let i = 0; i < barGroups; i++) {
+      const bgx = 240 + i * (w / barGroups)
+      const bgy = 420
+      this.add.rectangle(bgx, bgy, 120, 160, 0x1a1a1a, 0.7).setDepth(2)
+      for (let b = 0; b < 5; b++) {
+        this.add.rectangle(bgx - 48 + b * 24, bgy, 6, 154, 0x333333, 0.9).setDepth(3)
+      }
+      this.add.rectangle(bgx, bgy, 120, 6, 0x3d3d3d, 0.9).setDepth(4)
+    }
+
+    // Skull carvings
+    const skulls = Math.max(2, Math.floor(w / 420))
+    for (let i = 0; i < skulls; i++) {
+      const sx = 180 + i * (w / skulls)
+      const sy = 270 + (i % 2) * 60
+      this.add.circle(sx, sy, 14, 0x221a0a, 0.9).setDepth(3)
+      this.add.rectangle(sx - 5, sy - 2, 5, 5, 0x0a0a0a, 0.95).setDepth(4)
+      this.add.rectangle(sx + 5, sy - 2, 5, 5, 0x0a0a0a, 0.95).setDepth(4)
+    }
+
+    // Floor puddles
+    const puddles = Math.max(2, Math.floor(w / 380))
+    for (let i = 0; i < puddles; i++) {
+      const px = 160 + i * (w / puddles) + (i % 3 - 1) * 30
+      const pool = this.add.rectangle(px, 686, 60 + (i % 3) * 20, 4, 0x334455, 0.35).setDepth(2)
+      this.tweens.add({ targets: pool, alpha: 0.15, duration: 1400 + (px % 600), yoyo: true, repeat: -1 })
+    }
+
+    // Dim torches
+    const dTorches = Math.max(2, Math.floor(w / 480))
+    for (let i = 0; i < dTorches; i++) {
+      const tx = 240 + i * (w / dTorches)
+      this.add.rectangle(tx, 240, 7, 24, 0x3a2810, 0.9).setDepth(4)
+      const flame = this.add.rectangle(tx, 228, 12, 16, 0xff6600, 0.65).setDepth(5)
+      const glow  = this.add.rectangle(tx, 228, 40, 60, 0xff4400, 0.06).setDepth(4)
+      this.tweens.add({ targets: flame, scaleY: 0.6, alpha: 0.45, duration: 180 + (tx % 100), yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.02, duration: 220 + (tx % 120), yoyo: true, repeat: -1 })
+    }
+  }
+
+  // ── Crypt — stone arches, coffin alcoves, candles, rune carvings ──────────────
+  private buildSceneryCrypt(w: number) {
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x060408, 0.35).setDepth(2)
+
+    // Ceiling arch ribs
+    const arches = Math.max(3, Math.floor(w / 300))
+    for (let i = 0; i < arches; i++) {
+      const ax = 150 + i * (w / arches)
+      this.add.rectangle(ax, 8, 16, 28, 0x1a1218, 0.9).setDepth(3)
+      this.add.rectangle(ax - 60, 28, 8, 14, 0x1a1218, 0.7).setDepth(3)
+      this.add.rectangle(ax + 60, 28, 8, 14, 0x1a1218, 0.7).setDepth(3)
+    }
+
+    // Coffin alcoves
+    const alcoves = Math.max(2, Math.floor(w / 400))
+    for (let i = 0; i < alcoves; i++) {
+      const alx = 200 + i * (w / alcoves)
+      const aly = 380
+      this.add.rectangle(alx, aly, 72, 130, 0x0d0a10, 0.9).setDepth(2)
+      this.add.rectangle(alx, aly - 64, 72, 4, 0x1a1520, 0.7).setDepth(3)
+      this.add.rectangle(alx - 34, aly, 4, 124, 0x221a28, 0.7).setDepth(3)
+      this.add.rectangle(alx + 34, aly, 4, 124, 0x221a28, 0.7).setDepth(3)
+      this.add.rectangle(alx, aly + 30, 40, 8, 0x2a2230, 0.8).setDepth(3)
+    }
+
+    // Candles on floor
+    const candles = Math.max(3, Math.floor(w / 260))
+    for (let i = 0; i < candles; i++) {
+      const cx = 130 + i * (w / candles) + (i % 3 - 1) * 15
+      this.add.rectangle(cx, 670, 6, 24, 0xe8e0d0, 0.9).setDepth(4)
+      const flame = this.add.rectangle(cx, 654, 6, 12, 0xffdd88, 0.9).setDepth(5)
+      const glow  = this.add.rectangle(cx, 654, 24, 40, 0xffaa44, 0.10).setDepth(4)
+      this.tweens.add({ targets: flame, scaleX: 0.6, scaleY: 0.8, alpha: 0.65, duration: 100 + (cx % 80), yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.04, duration: 130 + (cx % 100), yoyo: true, repeat: -1 })
+    }
+
+    // Rune strips on walls
+    const runes = Math.max(3, Math.floor(w / 300))
+    for (let i = 0; i < runes; i++) {
+      const rx = 120 + i * (w / runes)
+      const ry = 160 + (i % 4) * 50
+      this.add.rectangle(rx, ry, 80, 2, 0x4a3858, 0.45).setDepth(2)
+      this.add.rectangle(rx + 30, ry + 6, 20, 2, 0x3a2848, 0.35).setDepth(2)
+    }
+  }
+
+  // ── Chapel — stained glass, pews, altar, gothic arches ───────────────────────
+  private buildSceneryChapel(w: number) {
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x020408, 0.32).setDepth(2)
+
+    // Stained glass windows
+    const windows = Math.max(2, Math.floor(w / 380))
+    const glassColors = [0x880033, 0x005588, 0x446600, 0x882200]
+    for (let i = 0; i < windows; i++) {
+      const wx = 190 + i * (w / windows)
+      this.add.rectangle(wx, 220, 64, 140, 0x0d1020, 0.9).setDepth(2)
+      this.add.rectangle(wx, 220, 58, 134, 0x101420, 0.8).setDepth(2)
+      for (let p = 0; p < 4; p++) {
+        const py = 220 - 42 + p * 28
+        const pane = this.add.rectangle(wx, py, 52, 26, glassColors[p], 0.45).setDepth(3)
+        this.tweens.add({ targets: pane, alpha: 0.25, duration: 2000 + p * 400 + (wx % 600), yoyo: true, repeat: -1 })
+      }
+      this.add.rectangle(wx, 220, 58, 4, 0x1a1e28, 0.9).setDepth(4)
+      this.add.rectangle(wx, 220, 4, 134, 0x1a1e28, 0.9).setDepth(4)
+      const pool = this.add.rectangle(wx, 680, 80, 6, glassColors[1], 0.15).setDepth(2)
+      this.tweens.add({ targets: pool, alpha: 0.05, duration: 1800 + (wx % 600), yoyo: true, repeat: -1 })
+    }
+
+    // Pew silhouettes
+    const pews = Math.max(3, Math.floor(w / 280))
+    for (let i = 0; i < pews; i++) {
+      const pewx = 140 + i * (w / pews) + (i % 2) * 30 - 15
+      this.add.rectangle(pewx, 665, 160, 12, 0x180e06, 0.9).setDepth(3)
+      this.add.rectangle(pewx, 655, 160, 4, 0x201408, 0.8).setDepth(3)
+      this.add.rectangle(pewx - 72, 660, 8, 16, 0x180e06, 0.9).setDepth(3)
+      this.add.rectangle(pewx + 72, 660, 8, 16, 0x180e06, 0.9).setDepth(3)
+    }
+
+    // Altar (small rooms only)
+    if (w <= 1300) {
+      const ax = w / 2
+      this.add.rectangle(ax, 650, 120, 50, 0x1c1408, 0.9).setDepth(4)
+      this.add.rectangle(ax, 625, 100, 6, 0x2a1e0e, 0.9).setDepth(4)
+      ;[-30, 0, 30].forEach(ox => {
+        this.add.rectangle(ax + ox, 616, 6, 18, 0xe8e0d0, 0.9).setDepth(5)
+        const f = this.add.rectangle(ax + ox, 607, 5, 10, 0xffdd88, 0.85).setDepth(6)
+        this.tweens.add({ targets: f, scaleX: 0.5, scaleY: 0.75, duration: 90 + Math.abs(ox), yoyo: true, repeat: -1 })
       })
     }
-  }
 
-  // ── Engineering Bay — amber, pipes, fuel tanks, gauges ───────────────────────
-  private buildSceneryEngineering(w: number) {
-    this.add.rectangle(w / 2, 360, w, 720, 0x0d0700, 0.32).setDepth(2)
-
-    // Ceiling: horizontal pipe bundles running full width in segments
-    const segs = Math.ceil(w / 200)
-    for (let i = 0; i < segs; i++) {
-      this.add.image(100 + i * 200, 28, 'scn-pipe-bundle').setAlpha(0.9).setDepth(3)
-    }
-    // Pipe junction bolts
-    for (let i = 0; i < segs; i++) {
-      const jx = i * 200
-      this.add.rectangle(jx, 28, 14, 28, 0x3d5060, 0.95).setDepth(4)
-      this.add.rectangle(jx, 18, 12, 6, 0x4a6070, 0.9).setDepth(4)
-    }
-
-    // Vertical feed pipes down from ceiling to mid wall
-    const vpipes = Math.max(3, Math.floor(w / 350))
-    for (let i = 0; i < vpipes; i++) {
-      const px = 180 + i * (w / vpipes)
-      const ph = 120 + (i % 3) * 40
-      this.add.rectangle(px, ph / 2 + 40, 12, ph, 0x455a64, 0.85).setDepth(3)
-      this.add.rectangle(px, 40, 18, 10, 0x546e7a, 0.9).setDepth(4)
-      // Valve wheel
-      this.add.rectangle(px, ph / 2 + 40 - 20, 22, 6, 0x607d8b, 0.8).setDepth(4)
-      this.add.rectangle(px, ph / 2 + 40 - 20, 6, 18, 0x607d8b, 0.8).setDepth(4)
-    }
-
-    // Floor: fuel cylinders
-    const tanks = Math.max(3, Math.floor(w / 280))
-    for (let i = 0; i < tanks; i++) {
-      const tx = 140 + i * (w / tanks) + (i % 3 - 1) * 30
-      this.add.image(tx, 640, 'scn-fuel-cylinder').setAlpha(0.9).setDepth(4)
-      // Heat glow at base
-      const glow = this.add.rectangle(tx, 678, 36, 10, 0xff6600, 0.18).setDepth(3)
-      this.tweens.add({ targets: glow, alpha: 0.06, duration: 700 + (tx % 500), yoyo: true, repeat: -1 })
-    }
-
-    // Warning stripes along floor edges
-    const warns = Math.max(4, Math.floor(w / 240))
-    for (let i = 0; i < warns; i++) {
-      this.add.image(110 + i * (w / warns), 683, 'scn-warning').setAlpha(0.65).setDepth(3)
-    }
-
-    // Pressure gauges on mid-wall (drawn as circles)
-    const gauges = Math.max(3, Math.floor(w / 320))
-    for (let i = 0; i < gauges; i++) {
-      const gx = 200 + i * (w / gauges)
-      const gy = 380 + (i % 3) * 40
-      this.add.circle(gx, gy, 18, 0x37474f, 0.9).setDepth(3)
-      this.add.circle(gx, gy, 13, 0x1a2a36, 0.95).setDepth(3)
-      this.add.circle(gx, gy, 3, 0xff6600, 0.9).setDepth(4)
-      // Needle (rectangle rotated)
-      this.add.rectangle(gx + 5, gy - 4, 12, 2, 0xff3300, 0.9).setDepth(4)
-        .setRotation(-0.6 + (i % 3) * 0.4)
-    }
-
-    // Ambient orange floor glow strips
-    const floorGlows = Math.max(2, Math.floor(w / 400))
-    for (let i = 0; i < floorGlows; i++) {
-      const fgx = 200 + i * (w / floorGlows)
-      const fg = this.add.rectangle(fgx, 686, 200, 4, 0xff8800, 0.3).setDepth(2)
-      this.tweens.add({ targets: fg, alpha: 0.1, duration: 900 + (fgx % 600), yoyo: true, repeat: -1 })
+    // Gothic ceiling ribs
+    const ribs = Math.max(3, Math.ceil(w / 200))
+    for (let i = 0; i < ribs; i++) {
+      this.add.rectangle(100 + i * (w / ribs), 10, 12, 24, 0x141018, 0.85).setDepth(3)
     }
   }
 
-  // ── Cargo Hold — grey-yellow, pods stacked, crane rail, floor markings ───────
-  private buildSceneryCargo(w: number) {
-    this.add.rectangle(w / 2, 360, w, 720, 0x050504, 0.25).setDepth(2)
-
-    // Ceiling: overhead crane rail (full width)
-    this.add.rectangle(w / 2, 22, w - 40, 16, 0x37474f, 0.9).setDepth(3)
-    this.add.rectangle(w / 2, 16, w - 40, 4, 0x546e7a, 0.85).setDepth(3)
-    // Rail wheels / trolleys
-    const trolleys = Math.max(3, Math.floor(w / 300))
-    for (let i = 0; i < trolleys; i++) {
-      const tx = 160 + i * (w / trolleys)
-      this.add.rectangle(tx, 22, 28, 10, 0x455a64, 0.9).setDepth(4)
-      this.add.circle(tx - 8, 22, 5, 0x263238, 0.9).setDepth(4)
-      this.add.circle(tx + 8, 22, 5, 0x263238, 0.9).setDepth(4)
-      // Hanging chain
-      const chainH = 60 + (i % 3) * 30
-      this.add.rectangle(tx, 22 + chainH / 2, 4, chainH, 0x3d5060, 0.7).setDepth(3)
-      this.add.rectangle(tx, 22 + chainH, 14, 8, 0x455a64, 0.85).setDepth(3)
-    }
-
-    // Wall: stacked storage pods (as tall columns)
-    const podCols = Math.max(3, Math.floor(w / 360))
-    for (let i = 0; i < podCols; i++) {
-      const px = 180 + i * (w / podCols)
-      const stack = 2 + (i % 2)
-      for (let s = 0; s < stack; s++) {
-        this.add.image(px, 650 - s * 72, 'scn-storage-pod').setAlpha(0.85).setDepth(3 + (s === 0 ? 1 : 0))
-      }
-    }
-
-    // Floor: painted directional arrows and lines
-    const arrows = Math.max(3, Math.floor(w / 300))
-    for (let i = 0; i < arrows; i++) {
-      const ax = 130 + i * (w / arrows)
-      // Arrow line
-      this.add.rectangle(ax, 680, 80, 3, 0xffd600, 0.45).setDepth(3)
-      // Arrow head
-      this.add.triangle(ax + 44, 680, ax + 32, 672, ax + 32, 688, ax + 44, 680, 0xffd600, 0.45).setDepth(3)
-    }
-
-    // Floor: painted zone stripes
-    const zones = Math.max(2, Math.floor(w / 500))
-    for (let i = 0; i < zones; i++) {
-      const zx = 250 + i * (w / zones)
-      this.add.rectangle(zx, 684, 120, 2, 0xffffff, 0.2).setDepth(2)
-    }
-
-    // Wall: equipment shelving (girder as shelf bracket)
-    const shelves = Math.max(2, Math.floor(w / 450))
-    for (let i = 0; i < shelves; i++) {
-      const shx = 300 + i * (w / shelves)
-      this.add.image(shx, 200, 'scn-girder').setAlpha(0.6).setDepth(2).setScale(0.8, 1)
-      this.add.image(shx, 350, 'scn-girder').setAlpha(0.5).setDepth(2).setScale(0.6, 1)
-    }
-
-    // Hanging cargo lights (orange cone glow under trolleys)
-    for (let i = 0; i < trolleys; i++) {
-      const lx = 160 + i * (w / trolleys)
-      const ly = 22 + 60 + (i % 3) * 30 + 20
-      const glow = this.add.circle(lx, ly + 30, 40, 0xff8800, 0.08).setDepth(2)
-      this.tweens.add({ targets: glow, alpha: 0.03, duration: 1000 + (lx % 600), yoyo: true, repeat: -1 })
-    }
-  }
-
-  // ── Research Lab — cyan, specimen tanks, data terminals, grid lights ──────────
-  private buildSceneryLab(w: number) {
-    this.add.rectangle(w / 2, 360, w, 720, 0x000d10, 0.32).setDepth(2)
-
-    // Ceiling: grid of sensor lights
-    const gridCols = Math.ceil(w / 160)
-    for (let i = 0; i < gridCols; i++) {
-      const gx = 80 + i * 160
-      // Light housing
-      this.add.rectangle(gx, 14, 60, 10, 0x1a2a30, 0.9).setDepth(3)
-      const lamp = this.add.rectangle(gx, 14, 52, 5, 0x88ffee, 0.7).setDepth(4)
-      this.add.rectangle(gx, 22, 48, 20, 0x004433, 0.12).setDepth(2)
-      this.tweens.add({ targets: lamp, alpha: 0.45, duration: 2000 + (gx % 1000), yoyo: true, repeat: -1 })
-    }
-
-    // Wall: specimen tank clusters
-    const tankGroups = Math.max(2, Math.floor(w / 420))
-    for (let i = 0; i < tankGroups; i++) {
-      const gx = 200 + i * (w / tankGroups)
-      // 2-3 tanks per cluster
-      const count = 2 + (i % 2)
-      for (let t = 0; t < count; t++) {
-        const tx = gx + (t - Math.floor(count / 2)) * 44
-        const ty = 580 - (t % 2) * 30
-        this.add.image(tx, ty, 'scn-specimen-tank').setAlpha(0.85).setDepth(3)
-        // Tank glow
-        const tglow = this.add.rectangle(tx, ty, 30, 100, 0x00aacc, 0.08).setDepth(2)
-        this.tweens.add({ targets: tglow, alpha: 0.03, duration: 1200 + t * 400 + (gx % 500), yoyo: true, repeat: -1 })
-      }
-    }
-
-    // Floor: data terminals
-    const terminals = Math.max(2, Math.floor(w / 400))
-    for (let i = 0; i < terminals; i++) {
-      const tx = 160 + i * (w / terminals) + (i % 2) * 40 - 20
-      this.add.image(tx, 636, 'scn-console-unit').setAlpha(0.85).setDepth(4)
-    }
-
-    // Holographic display panels (floating blue rectangles)
-    const holos = Math.max(2, Math.floor(w / 480))
-    for (let i = 0; i < holos; i++) {
-      const hx = 260 + i * (w / holos)
-      const hy = 320 + (i % 3) * 50
-      const holo = this.add.rectangle(hx, hy, 100, 64, 0x004466, 0.55).setDepth(3)
-      this.add.rectangle(hx, hy, 96, 60, 0x006688, 0.25).setDepth(3)
-      // Scan line on holo
-      const scan = this.add.rectangle(hx, hy - 28, 90, 3, 0x00ddff, 0.7).setDepth(4)
-      this.tweens.add({ targets: scan, y: hy + 28, duration: 1400 + (hx % 600), repeat: -1 })
-      this.tweens.add({ targets: holo, alpha: 0.35, duration: 1800 + (hx % 700), yoyo: true, repeat: -1 })
-    }
-
-    // Data stream lines on walls (thin horizontal green lines)
-    const streams = Math.max(4, Math.floor(w / 250))
-    for (let i = 0; i < streams; i++) {
-      const sx = 100 + i * (w / streams)
-      const sy = 200 + (i % 5) * 60
-      const streamW = 60 + (i % 4) * 30
-      this.add.rectangle(sx, sy, streamW, 2, 0x00cc88, 0.4).setDepth(2)
-    }
-
-    // Wall panels with readout screens
-    const panels = Math.max(2, Math.floor(w / 550))
-    for (let i = 0; i < panels; i++) {
-      const px = 350 + i * (w / panels)
-      this.add.image(px, 430, 'scn-panel').setAlpha(0.7).setDepth(3)
-      const blink = this.add.rectangle(px + 18, 420, 6, 6, 0x00e5ff).setAlpha(0.9).setDepth(4)
-      this.tweens.add({ targets: blink, alpha: 0.1, duration: 400 + (px % 500), yoyo: true, repeat: -1 })
-    }
-  }
-
-  // ── Armory / Security — red, weapon lockers, cameras, blast doors ─────────────
+  // ── Armory — weapon racks, shields, flagstones, braziers ─────────────────────
   private buildSceneryArmory(w: number) {
-    this.add.rectangle(w / 2, 360, w, 720, 0x0d0000, 0.32).setDepth(2)
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x0a0400, 0.32).setDepth(2)
 
-    // Ceiling: security cameras evenly spaced
-    const cams = Math.max(3, Math.floor(w / 280))
-    for (let i = 0; i < cams; i++) {
-      const cx = 120 + i * (w / cams)
-      this.add.image(cx, 24, 'scn-sec-camera').setAlpha(0.85).setDepth(4)
-      // Red indicator beam cone
-      const beam = this.add.triangle(
-        cx - 30, 60, cx + 30, 60, cx, 30, 0xff0000, 0.07,
-      ).setDepth(2)
-      this.tweens.add({ targets: beam, alpha: 0.02, duration: 900 + (cx % 600), yoyo: true, repeat: -1 })
+    // Weapon racks
+    const racks = Math.max(2, Math.floor(w / 380))
+    for (let i = 0; i < racks; i++) {
+      const rx = 180 + i * (w / racks)
+      this.add.rectangle(rx, 360, 120, 8, 0x2a1a0a, 0.9).setDepth(3)
+      for (let s = 0; s < 3; s++) {
+        const sx = rx - 40 + s * 40
+        this.add.rectangle(sx, 390, 5, 60, 0x505050, 0.85).setDepth(4)
+        this.add.rectangle(sx, 368, 18, 5, 0x604030, 0.9).setDepth(4)
+        this.add.rectangle(sx, 354, 5, 14, 0x7a5a3a, 0.9).setDepth(4)
+      }
     }
 
-    // Wall: weapon lockers in rows
-    const lockers = Math.max(3, Math.floor(w / 320))
-    for (let i = 0; i < lockers; i++) {
-      const lx = 160 + i * (w / lockers)
-      const ly = 420 + (i % 2) * 60
-      this.add.image(lx, ly, 'scn-weapon-locker').setAlpha(0.85).setDepth(3)
+    // Shield emblems
+    const shields = Math.max(2, Math.floor(w / 460))
+    for (let i = 0; i < shields; i++) {
+      const shx = 200 + i * (w / shields)
+      const shy = 240 + (i % 2) * 60
+      this.add.rectangle(shx, shy, 48, 58, 0x1a0e06, 0.9).setDepth(2)
+      this.add.rectangle(shx, shy + 8, 44, 44, 0x8b0000, 0.6).setDepth(3)
+      this.add.rectangle(shx, shy + 8, 44, 6, 0xcc8800, 0.7).setDepth(4)
+      this.add.rectangle(shx, shy + 8, 6, 44, 0xcc8800, 0.7).setDepth(4)
     }
 
-    // Blast door segments on back wall (large dark rectangles)
-    const doors = Math.max(2, Math.floor(w / 500))
-    for (let i = 0; i < doors; i++) {
-      const dx = 250 + i * (w / doors)
-      this.add.rectangle(dx, 300, 120, 200, 0x1a2226, 0.8).setDepth(2)
-      this.add.rectangle(dx, 300, 116, 196, 0x0d1418, 0.7).setDepth(2)
-      // Blast door panel lines
-      this.add.rectangle(dx, 250, 116, 4, 0x37474f, 0.7).setDepth(3)
-      this.add.rectangle(dx, 350, 116, 4, 0x37474f, 0.7).setDepth(3)
-      // Warning markings
-      this.add.rectangle(dx - 46, 300, 24, 80, 0xff1744, 0.18).setDepth(3)
-      this.add.rectangle(dx + 46, 300, 24, 80, 0xff1744, 0.18).setDepth(3)
-      // Lock indicator
-      const lockLed = this.add.rectangle(dx, 300, 10, 10, 0xff1744, 0.9).setDepth(4)
-      this.tweens.add({ targets: lockLed, alpha: 0.2, duration: 600 + (dx % 400), yoyo: true, repeat: -1 })
+    // Flagstone floor
+    const stones = Math.ceil(w / 100)
+    for (let i = 0; i < stones; i++) {
+      this.add.rectangle(50 + i * 100, 686, 98, 28, i % 2 === 0 ? 0x141006 : 0x0e0c04, 0.5).setDepth(2)
     }
 
-    // Floor: red emergency light strips
-    const strips = Math.max(3, Math.floor(w / 280))
-    for (let i = 0; i < strips; i++) {
-      const sx = 120 + i * (w / strips)
-      const strip = this.add.rectangle(sx, 683, 120, 4, 0xff2200, 0.6).setDepth(3)
-      this.tweens.add({ targets: strip, alpha: 0.15, duration: 500 + (sx % 400), yoyo: true, repeat: -1 })
+    // Ceiling braziers
+    const braziers = Math.max(2, Math.floor(w / 340))
+    for (let i = 0; i < braziers; i++) {
+      const bx = 170 + i * (w / braziers)
+      this.add.rectangle(bx, 20, 4, 30, 0x3a2810, 0.9).setDepth(3)
+      this.add.rectangle(bx, 38, 20, 8, 0x4a3018, 0.9).setDepth(4)
+      const flame = this.add.rectangle(bx, 26, 18, 20, 0xff8800, 0.8).setDepth(5)
+      const glow  = this.add.rectangle(bx, 26, 50, 70, 0xff6600, 0.08).setDepth(4)
+      this.tweens.add({ targets: flame, scaleY: 0.65, scaleX: 0.75, alpha: 0.55, duration: 140 + (bx % 120), yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.03, duration: 200 + (bx % 150), yoyo: true, repeat: -1 })
     }
 
-    // Girders as structural reinforcement on walls
-    const girds = Math.max(3, Math.floor(w / 420))
-    for (let i = 0; i < girds; i++) {
-      const gx = 220 + i * (w / girds)
-      this.add.image(gx, 160, 'scn-girder').setAlpha(0.55).setDepth(2)
+    // Trophy mounts
+    const trophies = Math.max(2, Math.floor(w / 500))
+    for (let i = 0; i < trophies; i++) {
+      const tx = 250 + i * (w / trophies)
+      this.add.circle(tx, 300, 22, 0x1a0e06, 0.85).setDepth(3)
+      this.add.circle(tx, 290, 16, 0x221408, 0.8).setDepth(3)
+      this.add.rectangle(tx - 20, 272, 4, 22, 0x1a0e06, 0.8).setDepth(3).setRotation(-0.3)
+      this.add.rectangle(tx + 20, 272, 4, 22, 0x1a0e06, 0.8).setDepth(3).setRotation(0.3)
+    }
+  }
+
+  // ── Throne Hall — grand pillars, royal banners, ornate floor, throne ──────────
+  private buildSceneryThrone(w: number) {
+    this.buildWallFeatures(w)
+    this.add.rectangle(w / 2, 360, w, 720, 0x0a0408, 0.38).setDepth(2)
+
+    // Grand pillars
+    const pillars = Math.max(4, Math.floor(w / 220))
+    for (let i = 0; i < pillars; i++) {
+      const px = 110 + i * (w / pillars)
+      this.add.rectangle(px, 360, 32, 720, 0x15100c, 0.9).setDepth(3)
+      this.add.rectangle(px, 360, 24, 720, 0x1e1810, 0.6).setDepth(3)
+      this.add.rectangle(px, 12,  52, 18, 0x2a2016, 0.9).setDepth(4)
+      this.add.rectangle(px, 682, 52, 18, 0x2a2016, 0.9).setDepth(4)
+      this.add.rectangle(px, 40,  34, 4, 0xcc8800, 0.65).setDepth(4)
+      this.add.rectangle(px, 672, 34, 4, 0xcc8800, 0.65).setDepth(4)
     }
 
-    // Vertical support struts
-    const struts = Math.max(2, Math.floor(w / 500))
-    for (let i = 0; i < struts; i++) {
-      const sx = 300 + i * (w / struts)
-      this.add.image(sx, 130, 'scn-strut-v').setAlpha(0.5).setDepth(2)
+    // Royal banners — purple/gold
+    const banners = Math.max(3, Math.floor(w / 320))
+    for (let i = 0; i < banners; i++) {
+      const bx = 180 + i * (w / banners)
+      this.add.rectangle(bx, 140, 48, 220, 0x380848, 0.9).setDepth(3)
+      this.add.rectangle(bx, 140, 36, 220, 0x440a58, 0.5).setDepth(3)
+      this.add.rectangle(bx,  30, 48, 8, 0xcc8800, 0.8).setDepth(4)
+      this.add.rectangle(bx, 250, 48, 8, 0xcc8800, 0.8).setDepth(4)
+      this.add.rectangle(bx, 140, 16, 16, 0xcc8800, 0.6).setDepth(4).setRotation(Math.PI / 4)
+    }
+
+    // Ornate floor tiles
+    const tiles = Math.ceil(w / 64)
+    for (let i = 0; i < tiles; i++) {
+      this.add.rectangle(32 + i * 64, 686, 62, 28, i % 2 === 0 ? 0x1a1408 : 0x120e06, 0.6).setDepth(2)
+      if (i % 4 === 0) this.add.rectangle(32 + i * 64, 686, 2, 28, 0xcc8800, 0.2).setDepth(3)
+    }
+
+    // Throne dais
+    const tx = w / 2
+    this.add.rectangle(tx, 654, 100, 48, 0x1a1008, 0.95).setDepth(4)
+    this.add.rectangle(tx, 590, 90, 140, 0x1e1408, 0.95).setDepth(4)
+    this.add.rectangle(tx, 590, 80, 130, 0x280c08, 0.7).setDepth(4)
+    this.add.rectangle(tx - 44, 630, 14, 50, 0x1a1008, 0.9).setDepth(4)
+    this.add.rectangle(tx + 44, 630, 14, 50, 0x1a1008, 0.9).setDepth(4)
+    this.add.rectangle(tx, 518, 90, 8, 0xcc8800, 0.7).setDepth(5)
+    for (let pt = 0; pt < 5; pt++) {
+      this.add.rectangle(tx - 36 + pt * 18, 510, 8, 16, 0xcc8800, 0.65).setDepth(5)
+    }
+
+    // Grand torches
+    const tTorches = Math.max(3, Math.floor(w / 280))
+    for (let i = 0; i < tTorches; i++) {
+      const torchX = 140 + i * (w / tTorches)
+      this.add.rectangle(torchX, 180, 10, 40, 0x4a3820, 0.9).setDepth(4)
+      this.add.rectangle(torchX, 162, 16, 10, 0x604828, 0.9).setDepth(4)
+      const flame = this.add.rectangle(torchX, 150, 22, 28, 0xff9900, 0.9).setDepth(5)
+      const glow  = this.add.rectangle(torchX, 150, 70, 120, 0xff7700, 0.10).setDepth(4)
+      this.tweens.add({ targets: flame, scaleY: 0.65, scaleX: 0.7, alpha: 0.65, duration: 120 + (torchX % 110), yoyo: true, repeat: -1 })
+      this.tweens.add({ targets: glow, alpha: 0.04, duration: 180 + (torchX % 140), yoyo: true, repeat: -1 })
+    }
+  }
+
+  // ── shared wall features — thick castle columns at room edges ────────────────
+  private buildWallFeatures(w: number) {
+    // Left wall column — purple-grey stone with cosmic edge glow
+    this.add.rectangle(44, 360, 88, 720, 0x2a2248).setDepth(2)
+    this.add.rectangle(22, 360, 44, 720, 0x1e1836).setDepth(2)
+    this.add.rectangle(63, 360, 3, 720, 0x9966ee, 0.25).setDepth(3)
+    // Brick mortar lines on left wall
+    for (let by = 0; by < 720; by += 48) {
+      this.add.rectangle(32, by + 24, 64, 2, 0x150e28, 0.85).setDepth(2)
+    }
+    // Right wall column
+    this.add.rectangle(w - 44, 360, 88, 720, 0x2a2248).setDepth(2)
+    this.add.rectangle(w - 22, 360, 44, 720, 0x1e1836).setDepth(2)
+    this.add.rectangle(w - 63, 360, 3, 720, 0x9966ee, 0.25).setDepth(3)
+    for (let by = 0; by < 720; by += 48) {
+      this.add.rectangle(w - 32, by + 24, 64, 2, 0x150e28, 0.85).setDepth(2)
     }
   }
 
   // ── collectibles ──────────────────────────────────────────────────────────────
 
   private setupCollectibles() {
+    const isInsideWall = (x: number, y: number): boolean =>
+      this.tilemapLayers.some(layer => {
+        const tile = layer.getTileAtWorldXY(x, y)
+        return tile !== null && tile.index >= 0
+      })
+
     for (const item of this.cfg.items) {
+      if (isInsideWall(item.x, item.y)) continue
+      const abilityTex: Partial<Record<AbilityType, string>> = {
+        [AbilityType.Fire]:     'fire_ability',
+        [AbilityType.Electric]: 'lightning_ability',
+        [AbilityType.Ice]:      'ice_ability',
+      }
       const tex = item.type === 'heart'   ? 'item-heart'
                 : item.type === 'life'    ? 'item-life'
                 : item.type === 'mystery' ? 'item-mystery'
+                : item.type === 'ability' ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
                 : 'item-orb'
-      const img = this.add.image(item.x, item.y, tex).setDepth(8)
-        .setScale(item.type === 'mystery' ? 2.2 : 1.2)
-      img.setData('item', item)
-
-      if (item.type === 'ability') {
-        img.setTint(ABILITY_COLORS[item.ability ?? AbilityType.None])
+      const ABILITY_RING: Partial<Record<AbilityType, number>> = {
+        [AbilityType.Fire]: 0xff6600, [AbilityType.Electric]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
       }
+      const ringColor = item.type === 'ability'
+        ? (ABILITY_RING[item.ability ?? AbilityType.None] ?? 0xffffff)
+        : item.type === 'heart' ? 0xff4d6a : 0xffffff
+      const ring = this.add.circle(item.x, item.y, 20, 0x000000, 0)
+        .setStrokeStyle(2, ringColor)
+        .setDepth(7)
+
+      const img = this.add.image(item.x, item.y, tex).setDepth(8)
+        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : 1.2)
+      img.setData('item', item)
+      img.setData('ring', ring)
 
       this.tweens.add({
-        targets: img, y: item.y - 12,
+        targets: [img, ring], y: item.y - 12,
         duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-      })
-      this.tweens.add({
-        targets: img, rotation: Math.PI * 2,
-        duration: item.type === 'mystery' ? 1800 : 3200, repeat: -1, ease: 'Linear',
       })
       this.collectibleSprites.push(img)
     }
@@ -661,6 +718,90 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = this.physics.add.group()
     this.enemyGroup  = this.physics.add.group()
     this.enemyProjectiles = this.physics.add.group()
+
+    if (this.cfg.worldMap) {
+      // ── Tilemap world: create Phaser tile layers, mark collision tiles ──────
+      const { key, tileKey, tilesetName, section } = this.cfg.worldMap
+      const map = this.make.tilemap({ key })
+      const tileset = map.addTilesetImage(tilesetName, tileKey)!
+      const SCALE = section ? 720 / (section.rows * 32) : 1
+      const ox = section ? -(section.col * 32 * SCALE) : 0
+      const oy = section ? -(section.row * 32 * SCALE) : 0
+
+      const mkLayer = (name: string, depth: number, collide = false) => {
+        const layer = map.createLayer(name, tileset, ox, oy)
+        if (!layer) return null
+        if (SCALE !== 1) layer.setScale(SCALE)
+        layer.setDepth(depth)
+        if (collide) layer.setCollisionByExclusion([-1])
+        return layer
+      }
+
+      mkLayer('Background walls', -2)
+      const wallsLayer = mkLayer('Walls',           1, true)
+      const platLarge  = mkLayer('Platforms large', 1, true)
+      const platSmall  = mkLayer('Platform small',  1, true)
+      mkLayer('Banner', 5)
+      mkLayer('Windows', 3)
+
+      this.tilemapLayers = ([wallsLayer, platLarge, platSmall] as (Phaser.Tilemaps.TilemapLayer | null)[])
+        .filter((l): l is Phaser.Tilemaps.TilemapLayer => l !== null)
+
+      // Build explicit static bodies from tile data — guarantees collision even
+      // when Phaser's built-in tilemap physics is unreliable at certain scales.
+      this.tilemapLayers.forEach(l => this.addTileLayerBodies(l, SCALE, ox, oy))
+
+      for (const e of this.cfg.enemies) {
+        const enemy = new Enemy(this, e.x, e.y, e.ability)
+        this.enemies.push(enemy); this.enemyGroup.add(enemy)
+      }
+      for (const c of this.cfg.crates) {
+        const crate = this.physics.add.image(c.x, c.y, 'crate')
+        ;(crate.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(false)
+        crate.setDisplaySize(32, 32); this.crates.push(crate)
+      }
+      if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
+        const bossY = this.cfg.bossSpawnY ?? 620
+        this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000)
+        const W = this.cfg.worldWidth
+        this.boss.on('bossDead', () => {
+          this.bossDefeated = true
+          SoundManager.bossDeath()
+          this.cameras.main.shake(300, 0.010)
+          this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
+          this.addScore(2000)
+          this.time.delayedCall(3200, () => {
+            if (!this.roomTransitioning) {
+              this.roomTransitioning = true
+              this.cameras.main.fadeOut(900, 0, 0, 0)
+              this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
+            }
+          })
+        })
+      }
+
+      if (this.cfg.bossPortal) {
+        const { x, y } = this.cfg.bossPortal
+        const cy = y - 91  // center of 256px door, bottom ~37px below platform surface
+        this.add.rectangle(x, cy, 144, 256, 0x5c3317).setDepth(2)   // brown outer frame
+        this.add.rectangle(x, cy, 132, 244, 0x3d1f0a).setDepth(2)   // dark brown inner
+        this.add.rectangle(x, cy + 10, 12, 60, 0xcb9b00).setDepth(2) // gold handle
+        const glow = this.add.rectangle(x, cy, 164, 276, 0xff8800, 0.10).setDepth(1)
+        this.tweens.add({ targets: glow, alpha: 0.28, duration: 1300, yoyo: true, repeat: -1 })
+        this.portalLabel = this.add.text(x, cy - 140, '↑ ENTER SANCTUM', {
+          fontSize: '9px', fontFamily: FONT, color: '#ffcc88',
+        }).setOrigin(0.5).setDepth(11).setVisible(false)
+        this.bossPortalPos = this.cfg.bossPortal
+      }
+
+      // Extra static barriers from config (e.g. boss room exit seals)
+      for (const p of this.cfg.platforms) {
+        const zone = this.add.zone(p.x, p.y, p.w, p.h)
+        this.physics.add.existing(zone, true)
+        this.platforms.add(zone as unknown as Phaser.Physics.Arcade.Image)
+      }
+      return
+    }
 
     const W = this.cfg.worldWidth
     const exits = this.cfg.exits
@@ -766,7 +907,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
-      this.boss = new Boss(this, this.cfg.bossSpawnX, 620, this.cfg.bossHp, 3000)
+      this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000)
       this.boss.on('bossDead', () => {
         this.bossDefeated = true
         SoundManager.bossDeath()
@@ -816,7 +957,7 @@ export class GameScene extends Phaser.Scene {
     const count: number  = this.registry.get('playerCount') ?? 1
     const remoteIds: number[] = this.registry.get('remotePlayers') ?? []
     const entryDir: ExitDir | null = this.registry.get('entryDir') ?? null
-    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : { x: 100, y: 620 }
+    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : { x: 400, y: 620 }
 
     for (let i = 0; i < count; i++) {
       const p = new Player(this, pos.x + i * 60, pos.y, i)
@@ -844,6 +985,7 @@ export class GameScene extends Phaser.Scene {
 
       p.on('died', () => this.onPlayerDied(p))
       p.on('useAbility', (ability: AbilityType, src: Player) => this.fireAbility(ability, src))
+      p.on('useMelee', (src: Player) => this.doMeleeSwing(src))
       p.on('heartLost', () => {})
     }
   }
@@ -856,7 +998,6 @@ export class GameScene extends Phaser.Scene {
         this.ui.updateAmmo(i, max)
       })
       p.on('abilityAmmoChanged', (ammo: number) => this.ui.updateAmmo(i, ammo))
-      p.on('rapierSwing', (player: Player) => this.handleRapierSwing(player))
     })
 
     const persisted: { ability: AbilityType; ammo: number }[] | null = this.registry.get('persistedAbilities')
@@ -882,33 +1023,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private handleRapierSwing(player: Player) {
-    const dir  = player.flipX ? -1 : 1
-    const range = 80
-
-    const slash = this.add.rectangle(
-      player.x + dir * 30, player.y - 4, 48, 10, 0xfff4cc, 0.9,
-    ).setRotation(dir * 0.35).setDepth(15)
-    this.tweens.add({ targets: slash, alpha: 0, scaleX: 1.3, duration: 150,
-      onComplete: () => slash.destroy() })
-
-    this.enemies.forEach(e => {
-      if (dir * (e.x - player.x) > 0 &&
-          Math.abs(e.x - player.x) < range &&
-          Math.abs(e.y - player.y) < 48) {
-        e.die()
-        this.addScore(SCORE_ENEMY)
-      }
-    })
-    if (this.boss?.active &&
-        dir * (this.boss.x - player.x) > 0 &&
-        Math.abs(this.boss.x - player.x) < range + 20 &&
-        Math.abs(this.boss.y - player.y) < 60) {
-      SoundManager.bossHit()
-      this.boss.hit()
-    }
-  }
-
   private removeRemotePlayer(id: number) {
     const idx = this.players.findIndex(p => p.playerId === id)
     if (idx === -1) return
@@ -921,6 +1035,44 @@ export class GameScene extends Phaser.Scene {
     this.remoteInputs.delete(id)
     this.registry.set('playerCount', this.players.length)
     if (this.players.length === 0) this.time.delayedCall(500, () => this.gameOver())
+  }
+
+  // ── tilemap static bodies ───────────────────────────────────────────────────
+
+  // Scans a tile layer and adds one Arcade static body per horizontal run of
+  // solid tiles. This reliably stops players/enemies regardless of whether
+  // Phaser's internal tilemap physics fires correctly.
+  private addTileLayerBodies(
+    layer: Phaser.Tilemaps.TilemapLayer,
+    scale: number,
+    ox: number,
+    oy: number,
+  ) {
+    const tw = Math.round(layer.tilemap.tileWidth  * scale)
+    const th = Math.round(layer.tilemap.tileHeight * scale)
+    const cols = layer.layer.width
+    const rows = layer.layer.height
+
+    for (let r = 0; r < rows; r++) {
+      let runStart = -1
+
+      for (let c = 0; c <= cols; c++) {
+        const tile   = c < cols ? layer.getTileAt(c, r) : null
+        const solid  = tile !== null && tile.index >= 0
+
+        if (solid && runStart === -1) {
+          runStart = c
+        } else if (!solid && runStart !== -1) {
+          const runLen = c - runStart
+          const wx = ox + runStart * tw + (runLen * tw) / 2
+          const wy = oy + r * th + th / 2
+          const zone = this.add.zone(wx, wy, runLen * tw, th)
+          this.physics.add.existing(zone, true)
+          this.platforms.add(zone as unknown as Phaser.Physics.Arcade.Image)
+          runStart = -1
+        }
+      }
+    }
   }
 
   // ── collision ───────────────────────────────────────────────────────────────
@@ -937,10 +1089,19 @@ export class GameScene extends Phaser.Scene {
       for (let j = i + 1; j < this.players.length; j++)
         this.physics.add.collider(this.players[i], this.players[j])
 
+    // Tilemap layer colliders (worldMap mode)
+    this.tilemapLayers.forEach(layer => {
+      this.players.forEach(p => this.physics.add.collider(p, layer))
+      this.enemies.forEach(e => { if (!e.flying) this.physics.add.collider(e, layer) })
+      this.crates.forEach(c => this.physics.add.collider(c, layer))
+      if (this.boss) this.physics.add.collider(this.boss, layer)
+    })
+
     // Per-enemy platform colliders — flying enemies are excluded
     this.enemies.forEach(e => {
       if (!e.flying) this.physics.add.collider(e, this.platforms)
     })
+    if (this.boss) this.physics.add.collider(this.boss, this.platforms)
 
     // Player ↔ enemy group: swallow on contact while inhaling, damage otherwise
     this.players.forEach(p => {
@@ -993,6 +1154,30 @@ export class GameScene extends Phaser.Scene {
 
   // ── abilities ───────────────────────────────────────────────────────────────
 
+  private doMeleeSwing(src: Player) {
+    const dir = src.flipX ? -1 : 1
+    const RANGE = 90, HEIGHT = 70
+    const gfx = this.add.graphics().setDepth(12)
+    gfx.lineStyle(4, 0xffffff, 0.85)
+    gfx.strokeEllipse(src.x + dir * RANGE / 2, src.y, RANGE, HEIGHT)
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 220, onComplete: () => gfx.destroy() })
+
+    this.enemies.forEach(e => {
+      if (!e.active) return
+      const dx = e.x - src.x, dy = Math.abs(e.y - src.y)
+      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) { e.hit(); this.addScore(SCORE_ENEMY) }
+    })
+    if (this.boss?.active) {
+      const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
+      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) this.boss.hit()
+    }
+    this.destructibles.forEach(d => {
+      if (!d.active) return
+      const dx = d.x - src.x, dy = Math.abs(d.y - src.y)
+      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) d.takeDamage(30, DamageType.Physical)
+    })
+  }
+
   private fireAbility(ability: AbilityType, src: Player) {
     switch (ability) {
       case AbilityType.Fire:     this.spawnFireball(src);   break
@@ -1008,7 +1193,7 @@ export class GameScene extends Phaser.Scene {
     ;(fb.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 650).setGravityY(-800)
 
     this.enemies.forEach(e => {
-      this.physics.add.overlap(fb, e, () => { e.die(); this.addScore(SCORE_ENEMY); fb.destroy() })
+      this.physics.add.overlap(fb, e, () => { e.hit(); this.addScore(SCORE_ENEMY); fb.destroy() })
     })
     this.destructibles.forEach(d => {
       this.physics.add.overlap(fb, d, () => { d.takeDamage(50, DamageType.Fire); fb.destroy() })
@@ -1034,7 +1219,7 @@ export class GameScene extends Phaser.Scene {
     // 3× wider arc and heavier damage vs fire/ice
     this.enemies.forEach(e => {
       if (dir * (e.x - src.x) > 0 && Math.abs(e.y - src.y) < 80) {
-        e.die(); this.addScore(SCORE_ENEMY)
+        e.hit(); this.addScore(SCORE_ENEMY)
       }
     })
     if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
@@ -1059,7 +1244,7 @@ export class GameScene extends Phaser.Scene {
     proj.setTint(0x66ccff).setScale(1.15)
 
     this.enemies.forEach(e => {
-      this.physics.add.overlap(proj, e, () => { e.die(); this.addScore(SCORE_ENEMY); proj.destroy() })
+      this.physics.add.overlap(proj, e, () => { e.hit(); this.addScore(SCORE_ENEMY); proj.destroy() })
     })
     this.destructibles.forEach(d => {
       this.physics.add.overlap(proj, d, () => { d.takeDamage(50, DamageType.Physical); proj.destroy() })
@@ -1194,9 +1379,9 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
-    this.cameras.main.fadeOut(600, 0, 0, 0)
+    this.cameras.main.fadeOut(800, 80, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('MenuScene')
+      this.scene.start('GameOverScene')
     })
   }
 
@@ -1252,8 +1437,7 @@ export class GameScene extends Phaser.Scene {
     else p.jumpReleased()
 
     p.setInhaling(!!keys['inhale']?.isDown)
-    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) p.useAbility()
-    if (Phaser.Input.Keyboard.JustDown(keys['rapier']))  p.useRapier()
+    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) p.swingMelee()
   }
 
   private handleGamepad(p: Player, pad: Phaser.Input.Gamepad.Gamepad) {
@@ -1279,8 +1463,7 @@ export class GameScene extends Phaser.Scene {
     else         p.jumpReleased()
 
     p.setInhaling(ri.inhale)
-    if (ri.ability) p.useAbility()
-    if (ri.rapier)  p.useRapier()
+    if (ri.ability) p.swingMelee()
   }
 
   private setupGamepadEvents() {
@@ -1300,11 +1483,15 @@ export class GameScene extends Phaser.Scene {
         const player = this.players.find((_, i) => this.input.gamepad?.getPad(i) === pad)
         if (!player || !player.isAlive || player.isInhaled) return
         if (button.index === 1) player.useAbility()
-        if (button.index === 2) player.useRapier()
+        if (button.index === 2) player.swingMelee()
         // D-pad up (12) near throne door — same as pressing Up on keyboard
         if (button.index === 12 && this.cfg.isThrone) {
           const nearDoor = Math.abs(player.x - this.throneX) < 70
           if (nearDoor) this.winGame()
+        }
+        if (button.index === 12 && this.bossPortalPos) {
+          const nearPortal = Phaser.Math.Distance.Between(player.x, player.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
+          if (nearPortal) this.winGame()
         }
       },
     )
@@ -1414,8 +1601,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.gm.isPlaying()) return
 
     const sx = this.cameras.main.scrollX
-    this.bgLayers[0].tilePositionX = sx * 0.05
-    this.bgLayers[1].tilePositionX = sx * 0.18
+    if (this.bgLayers[0]) this.bgLayers[0].tilePositionX = sx * 0.05
+    if (this.bgLayers[1]) this.bgLayers[1].tilePositionX = sx * 0.18
 
     if (this.players.length > 0) {
       const alive = this.players.filter(p => p.isAlive)
@@ -1462,7 +1649,6 @@ export class GameScene extends Phaser.Scene {
             jump:    !!(pad2?.connected ? pad2.A : keys?.['jump']?.isDown),
             inhale:  !!(pad2?.connected ? (pad2.buttons[3]?.pressed) : keys?.['inhale']?.isDown),
             ability: !!(pad2?.connected ? pad2.buttons[1]?.pressed : keys?.['ability']?.isDown),
-            rapier:  !!(pad2?.connected ? pad2.buttons[2]?.pressed : keys?.['rapier']?.isDown),
           })
         }
       }
@@ -1470,10 +1656,11 @@ export class GameScene extends Phaser.Scene {
       if (p.inhaling) this.checkInhale(p)
       else this.enemies.forEach(e => e.stopPull())
 
-      // Exit boundary detection
+      // Exit boundary detection (all modes except continuous worldMap)
       const remoteIds2: number[] = this.registry.get('remotePlayers') ?? []
       const isLocalPlayer = !remoteIds2.includes(p.playerId)
-      if (isLocalPlayer && !this.roomTransitioning && p.isAlive) {
+      const isContinuousWorld = !!this.cfg.worldMap && !this.cfg.worldMap.section
+      if (isLocalPlayer && !this.roomTransitioning && p.isAlive && !isContinuousWorld) {
         const W = this.cfg.worldWidth
         const exits = this.cfg.exits
         const ep2 = this.cfg.exitPositions ?? {}
@@ -1490,6 +1677,13 @@ export class GameScene extends Phaser.Scene {
         this.throneLabel?.setVisible(nearDoor)
         if (nearDoor && jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)) this.winGame()
       }
+
+      if (this.bossPortalPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        const nearPortal = Phaser.Math.Distance.Between(p.x, p.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
+        this.portalLabel?.setVisible(nearPortal)
+        const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
+        if (nearPortal && jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)) this.winGame()
+      }
     })
 
     // Collectibles
@@ -1498,6 +1692,7 @@ export class GameScene extends Phaser.Scene {
       for (const p of this.players) {
         if (p.isAlive && Phaser.Math.Distance.Between(p.x, p.y, img.x, img.y) < 32) {
           this.collectItem(p, img.getData('item') as ItemSpawn)
+          ;(img.getData('ring') as Phaser.GameObjects.Arc | undefined)?.destroy()
           img.destroy()
           return false
         }
@@ -1519,6 +1714,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.ui.update(this.players)
+
+    // Debug: log first player position every 2 seconds
+    this._debugLogTimer += _dt
+    if (this._debugLogTimer >= 2000) {
+      this._debugLogTimer = 0
+      const p0 = this.players[0]
+      if (p0?.isAlive) console.log(`[pos] x=${Math.round(p0.x)} y=${Math.round(p0.y)}`)
+    }
 
     // Hide/show touch controls when a gamepad is connected or disconnected
     if (this.touchControls) {

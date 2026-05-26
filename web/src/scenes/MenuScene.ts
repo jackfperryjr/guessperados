@@ -139,54 +139,65 @@ export class MenuScene extends Phaser.Scene {
   private buildControls() {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
+    const cx = width / 2, cy = height / 2
 
-    const header = this.add.text(width / 2, height * 0.1, 'CONTROLS', {
-      fontSize: '20px', fontFamily: FONT, color: CLR_TITLE,
-      stroke: '#000', strokeThickness: 4,
+    // Dark panel matching the main menu style
+    const panel = this.add.rectangle(cx, cy + 15, 640, 490, 0x000000, 0.78)
+      .setStrokeStyle(1, 0x334466, 0.7)
+
+    const header = this.add.text(cx, cy - 215, 'CONTROLS', {
+      fontSize: '22px', fontFamily: FONT, color: CLR_TITLE,
+      stroke: '#000', strokeThickness: 5,
     }).setOrigin(0.5)
 
-    const col1 = width / 2 - 200
-    const col2 = width / 2 + 30
-    let y = height * 0.22
+    // Accent line under title
+    const titleSep = this.add.rectangle(cx, cy - 186, 560, 1, 0x334466, 0.9)
 
-    const head = (lbl: string, x: number) =>
-      this.add.text(x, y, lbl, { fontSize: '10px', fontFamily: FONT, color: CLR_SELECT }).setOrigin(0, 0)
+    // Three-column layout centered on screen
+    const colLabel = cx - 265
+    const colKB    = cx - 55
+    const colGP    = cx + 140
+
+    let y = cy - 168
+
+    // Column headers
+    const h0 = this.add.text(colLabel, y, 'ACTION',   { fontSize: '9px', fontFamily: FONT, color: '#556677' }).setOrigin(0, 0)
+    const h1 = this.add.text(colKB,    y, 'KEYBOARD', { fontSize: '9px', fontFamily: FONT, color: CLR_SELECT }).setOrigin(0, 0)
+    const h2 = this.add.text(colGP,    y, 'GAMEPAD',  { fontSize: '9px', fontFamily: FONT, color: CLR_SELECT }).setOrigin(0, 0)
+    y += 20
+    const colSep = this.add.rectangle(cx, y, 560, 1, 0x334466, 0.55)
+    y += 18
 
     const row = (label: string, kb: string, gp: string) => {
       const r = [
-        this.add.text(col1 - 110, y, label, { fontSize: '9px', fontFamily: FONT, color: CLR_DIM  }).setOrigin(0, 0),
-        this.add.text(col1,        y, kb,    { fontSize: '9px', fontFamily: FONT, color: CLR_BODY }).setOrigin(0, 0),
-        this.add.text(col2,        y, gp,    { fontSize: '9px', fontFamily: FONT, color: CLR_BODY }).setOrigin(0, 0),
+        this.add.text(colLabel, y, label, { fontSize: '9px', fontFamily: FONT, color: CLR_DIM  }).setOrigin(0, 0),
+        this.add.text(colKB,    y, kb,    { fontSize: '9px', fontFamily: FONT, color: CLR_BODY }).setOrigin(0, 0),
+        this.add.text(colGP,    y, gp,    { fontSize: '9px', fontFamily: FONT, color: CLR_BODY }).setOrigin(0, 0),
       ]
-      y += 28
+      y += 30
       return r
     }
 
-    const h1 = head('KEYBOARD', col1)
-    const h2 = head('GAMEPAD',  col2)
-    y += 24
-
     const rows = [
       ...row('MOVE',    'A / D',   'Left Stick'),
-      ...row('JUMP',    'W',       'A  /  Cross'),
-      ...row('FLOAT',   'Hold W',  'Hold A'),
-      ...row('INHALE',  'Z',       'Triangle  /  Y'),
-      ...row('ABILITY', 'X',       'B  /  Circle'),
-      ...row('MELEE',   'C',       'Square  /  X'),
+      ...row('JUMP',    'W',       'Cross  /  A'),
+      ...row('FLOAT',   'Hold W',  'Hold Cross'),
+      ...row('INHALE',  'C',       'Triangle  /  Y'),
+      ...row('ABILITY', 'X',       'Circle  /  B'),
+      ...row('MELEE',   'Z',       'Square  /  X'),
       ...row('PAUSE',   'ESC',     'Start'),
     ]
     y += 10
 
-    const note = this.add.text(width / 2, y + 20,
-      '2 players share keyboard  OR  plug in\n2 Bluetooth controllers!', {
-        fontSize: '9px', fontFamily: FONT, color: CLR_DIM, align: 'center',
-      }).setOrigin(0.5, 0)
+    const note = this.add.text(cx, y, '2 players: keyboard  OR  2 Bluetooth controllers', {
+      fontSize: '8px', fontFamily: FONT, color: CLR_DIM, align: 'center',
+    }).setOrigin(0.5, 0)
 
     const goBack = () => this.showScreen('main')
-    const back = this.menuButton(width / 2, height - 80, '< BACK')
+    const back = this.menuButton(cx, cy + 215, '< BACK')
     back.on('pointerdown', goBack)
 
-    items.push(header, h1, h2, ...rows, note, back)
+    items.push(panel, header, titleSep, h0, h1, h2, colSep, ...rows, note, back)
     this.controlsGroup = this.add.container(0, 0, items)
     this.controlsGroup.setData('gpItems', [{ text: back, action: goBack }])
   }
@@ -218,6 +229,6 @@ export class MenuScene extends Phaser.Scene {
     this.registry.set('lives',         3)
     this.registry.set('score',         0)
     this.cameras.main.fadeOut(400, 0, 0, 0)
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
   }
 }

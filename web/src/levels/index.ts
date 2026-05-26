@@ -25,606 +25,125 @@ export interface RoomConfig {
   bgFar: string
   bgMid: string
   exits: ExitDir[]
-  // Center position of each exit's gap: X for top/bottom, Y for left/right.
-  // Defaults: left/right → y=640, top/bottom → x=worldWidth/2
   exitPositions?: Partial<Record<ExitDir, number>>
   isTutorial?: boolean
   isThrone?: boolean
   isBossRoom?: boolean
   bossHp?: number
   bossSpawnX?: number
-  // Interior platforms only — floor/walls/ceiling auto-generated in buildLevel
+  bossSpawnY?: number
+  bossPortal?: { x: number; y: number }
+  roomImage?: string
+  worldHeight?: number
+  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
   platforms: Platform[]
-  slopes?: SlopeConfig[]   // each slope generates stepped tiles from (x1,y1) to (x2,y2)
+  slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
   destructibles: DestructibleSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
 }
 
-const REACTOR  = { tileset: 'tile-metal', bgFar: 'bg-reactor-core',  bgMid: 'bg-reactor-glow'  }
-const COMMAND  = { tileset: 'tile-metal', bgFar: 'bg-command-hull',  bgMid: 'bg-command-glow'  }
-const BREACH   = { tileset: 'tile-metal', bgFar: 'bg-hull-breach',   bgMid: 'bg-breach-glow'   }
-const COOLANT  = { tileset: 'tile-metal', bgFar: 'bg-coolant-bay',   bgMid: 'bg-coolant-glow'  }
-const NAVBAY   = { tileset: 'tile-metal', bgFar: 'bg-nav-bay',       bgMid: 'bg-nav-glow'      }
-const THRONE_T = { tileset: 'tile-metal', bgFar: 'bg-throne-hall',   bgMid: 'bg-throne-glow'   }
-const BRIDGE_T = { tileset: 'tile-metal', bgFar: 'bg-bridge-deck',   bgMid: 'bg-bridge-glow'   }
-const W = { small: 1200, medium: 1600, large: 2000 }
+const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
+const SANCTUM = { tileset: 'tile-castle', bgFar: 'bg-sanctum',     bgMid: 'bg-sanctum-glow' }
+const MAP = { key: 'world-map', tileKey: 'tileset', tilesetName: 'spritefusion' } as const
+const BOSS_MAP = { key: 'boss-map', tileKey: 'boss-tileset', tilesetName: 'spritefusion' } as const
 
-// ─── Tutorial Room ────────────────────────────────────────────────────────────
-export const TUTORIAL_ROOM: RoomConfig = {
-  name: 'Docking Bay', ...BREACH, worldWidth: W.medium,
-  exits: ['right'],
-  isTutorial: true,
-  platforms: [
-    { x: 320,  y: 560, w: 200, h: 16 },
-    { x: 640,  y: 480, w: 200, h: 16 },
-    { x: 960,  y: 560, w: 200, h: 16 },
-    { x: 1280, y: 480, w: 200, h: 16 },
+// ─── Main World (full tilemap, camera follows player) ─────────────────────────
+// Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
+
+const WORLD_ROOM: RoomConfig = {
+  name: 'The Castle',
+  ...HALL,
+  worldWidth:  174 * 32,   // 5568
+  worldHeight: 117 * 32,   // 3744
+  worldMap: { ...MAP },
+  exits: [],
+  platforms: [],
+  // Portal door sits on the wide floating platform in the far bottom-right room (y=2688)
+  bossPortal: { x: 4746, y: 3104 },
+  enemies: [
+    // Zombies (Fire) — ground patrol — no top-left room (x < 1600)
+    { x: 1700, y: 620, ability: AbilityType.Fire     },
+    { x: 2100, y: 620, ability: AbilityType.Fire     },
+    { x: 2500, y: 620, ability: AbilityType.Fire     },
+    { x: 2900, y: 620, ability: AbilityType.Fire     },
+    { x: 3400, y: 620, ability: AbilityType.Fire     },
+    { x: 3900, y: 620, ability: AbilityType.Fire     },
+    { x: 4400, y: 620, ability: AbilityType.Fire     },
+    { x: 4800, y: 620, ability: AbilityType.Fire     },
+    // Skeletons (Electric) — ground patrol
+    { x: 1900, y: 620, ability: AbilityType.Electric },
+    { x: 2300, y: 620, ability: AbilityType.Electric },
+    { x: 2700, y: 620, ability: AbilityType.Electric },
+    { x: 3200, y: 620, ability: AbilityType.Electric },
+    { x: 3700, y: 620, ability: AbilityType.Electric },
+    { x: 4200, y: 620, ability: AbilityType.Electric },
+    { x: 4600, y: 620, ability: AbilityType.Electric },
+    // Ducks (Ice) — floating
+    { x: 1800, y: 420, ability: AbilityType.Ice      },
+    { x: 2200, y: 420, ability: AbilityType.Ice      },
+    { x: 2600, y: 420, ability: AbilityType.Ice      },
+    { x: 3000, y: 420, ability: AbilityType.Ice      },
+    { x: 3500, y: 420, ability: AbilityType.Ice      },
+    { x: 4000, y: 420, ability: AbilityType.Ice      },
+    { x: 4500, y: 420, ability: AbilityType.Ice      },
   ],
-  enemies: [],
   destructibles: [],
-  crates: [{ x: 480, y: 650 }, { x: 1120, y: 650 }],
+  crates: [
+    { x: 1800, y: 580 }, { x: 2500, y: 580 },
+    { x: 3300, y: 580 }, { x: 4100, y: 580 },
+  ],
   items: [
-    { x: 500,  y: 440, type: 'ability', ability: AbilityType.Fire      },
-    { x: 1100, y: 440, type: 'ability', ability: AbilityType.Electric  },
+    { x: 1800, y: 560, type: 'heart' },
+    { x: 2400, y: 560, type: 'ability', ability: AbilityType.Fire     },
+    { x: 3100, y: 560, type: 'ability', ability: AbilityType.Electric },
+    { x: 3800, y: 560, type: 'ability', ability: AbilityType.Ice      },
+    { x: 4500, y: 560, type: 'heart' },
   ],
 }
 
-// ─── Throne Room ──────────────────────────────────────────────────────────────
-export const THRONE_ROOM: RoomConfig = {
-  name: 'The Throne', ...THRONE_T, worldWidth: W.medium,
+// ─── Boss Room (tilemap-based, accessed via portal in main world) ──────────────
+// Map: tileset/boss/map.json — 50×50 tiles at 32px = 1600×1600 world pixels
+// Floor surface at y=1312 (row 41), mid-platform at y=832
+
+const BOSS_TILEMAP_ROOM: RoomConfig = {
+  name: 'The Dark Sanctum',
+  ...SANCTUM,
+  worldWidth:  50 * 32,   // 1600
+  worldHeight: 50 * 32,   // 1600
+  worldMap: { ...BOSS_MAP },
   exits: ['left'],
-  isThrone: true,
-  platforms: [
-    { x: 350,  y: 560, w: 240, h: 16 },
-    { x: 1250, y: 560, w: 240, h: 16 },
-    { x: 800,  y: 420, w: 160, h: 16 },
-  ],
-  enemies: [],
-  destructibles: [],
-  crates: [],
-  items: [
-    { x: 360,  y: 440, type: 'ability', ability: AbilityType.Electric },
-    { x: 1240, y: 440, type: 'ability', ability: AbilityType.Ice      },
-  ],
-}
-
-// ─── Room Pool (13 will be drawn for each run) ────────────────────────────────
-
-const POOL: RoomConfig[] = [
-  // A — wide corridor, left+right exits
-  {
-    name: 'Reactor Corridor', ...REACTOR, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 280,  y: 560, w: 180, h: 16 }, { x: 540,  y: 480, w: 160, h: 16 },
-      { x: 800,  y: 560, w: 180, h: 16 }, { x: 1060, y: 480, w: 160, h: 16 },
-      { x: 1320, y: 560, w: 180, h: 16 },
-    ],
-    enemies: [
-      { x: 400,  y: 650, ability: AbilityType.Fire     },
-      { x: 800,  y: 650, ability: AbilityType.Electric },
-      { x: 1200, y: 650, ability: AbilityType.Ice      },
-    ],
-    destructibles: [
-      { x: 680,  y: 648, w: 44, h: 44, health: 70, ability: AbilityType.None },
-      { x: 960,  y: 648, w: 44, h: 44, health: 70, ability: AbilityType.Fire },
-    ],
-    crates: [{ x: 560, y: 650 }, { x: 1050, y: 650 }],
-    items: [{ x: 800, y: 440, type: 'heart' }],
-  },
-
-  // B — staircase up-right, exits right+top
-  {
-    name: 'Cargo Stairs', ...COMMAND, worldWidth: W.medium,
-    exits: ['left', 'right', 'top'],
-    platforms: [
-      { x: 240,  y: 600, w: 200, h: 16 }, { x: 500,  y: 520, w: 200, h: 16 },
-      { x: 760,  y: 440, w: 200, h: 16 }, { x: 1020, y: 360, w: 200, h: 16 },
-      { x: 1280, y: 280, w: 200, h: 16 },
-    ],
-    enemies: [
-      { x: 350,  y: 650, ability: AbilityType.Ice      },
-      { x: 680,  y: 500, ability: AbilityType.Fire     },
-      { x: 950,  y: 420, ability: AbilityType.Electric },
-    ],
-    destructibles: [
-      { x: 500,  y: 500, w: 40, h: 40, health: 60, ability: AbilityType.None },
-      { x: 1100, y: 340, w: 40, h: 40, health: 80, ability: AbilityType.Ice  },
-    ],
-    crates: [{ x: 270, y: 650 }, { x: 800, y: 420 }],
-    items: [{ x: 1020, y: 240, type: 'mystery' }],
-  },
-
-  // C — bottom drop, exits left+bottom
-  {
-    name: 'Maintenance Shaft', ...COOLANT, worldWidth: W.small,
-    exits: ['right', 'bottom'],
-    platforms: [
-      { x: 200,  y: 560, w: 160, h: 16 }, { x: 450,  y: 460, w: 160, h: 16 },
-      { x: 700,  y: 360, w: 160, h: 16 }, { x: 950,  y: 460, w: 160, h: 16 },
-    ],
-    enemies: [
-      { x: 250,  y: 650, ability: AbilityType.Ice  },
-      { x: 700,  y: 340, ability: AbilityType.Fire  },
-    ],
-    destructibles: [
-      { x: 450,  y: 440, w: 44, h: 44, health: 60, ability: AbilityType.Ice },
-      { x: 550,  y: 648, w: 44, h: 44, health: 80, ability: AbilityType.None },
-    ],
-    crates: [{ x: 350, y: 650 }, { x: 800, y: 650 }],
-    items: [{ x: 700, y: 240, type: 'ability', ability: AbilityType.Electric }],
-  },
-
-  // D — crossroads, all 4 exits
-  {
-    name: 'Junction Chamber', ...REACTOR, worldWidth: W.medium,
-    exits: ['left', 'right', 'top', 'bottom'],
-    platforms: [
-      { x: 400,  y: 500, w: 160, h: 16 }, { x: 800,  y: 380, w: 160, h: 16 },
-      { x: 1200, y: 500, w: 160, h: 16 }, { x: 600,  y: 600, w: 120, h: 16 },
-      { x: 1000, y: 600, w: 120, h: 16 },
-    ],
-    enemies: [
-      { x: 300,  y: 650, ability: AbilityType.Electric },
-      { x: 700,  y: 650, ability: AbilityType.Ice      },
-      { x: 1100, y: 650, ability: AbilityType.Fire     },
-      { x: 1400, y: 650, ability: AbilityType.Ice     },
-    ],
-    destructibles: [
-      { x: 800,  y: 360, w: 44, h: 44, health: 80, ability: AbilityType.Electric },
-    ],
-    crates: [{ x: 500, y: 650 }, { x: 900, y: 650 }, { x: 1300, y: 650 }],
-    items: [{ x: 800, y: 260, type: 'heart' }, { x: 1200, y: 380, type: 'mystery' }],
-  },
-
-  // E — breakable room, no enemies
-  {
-    name: 'Storage Bay', ...COMMAND, worldWidth: W.small,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 300, y: 560, w: 200, h: 16 }, { x: 600, y: 460, w: 200, h: 16 },
-      { x: 900, y: 560, w: 200, h: 16 },
-    ],
-    enemies: [],
-    destructibles: [
-      { x: 200,  y: 648, w: 44, h: 44, health: 50, ability: AbilityType.Fire     },
-      { x: 350,  y: 540, w: 44, h: 44, health: 50, ability: AbilityType.Ice      },
-      { x: 500,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.Ice     },
-      { x: 650,  y: 440, w: 44, h: 44, health: 60, ability: AbilityType.Electric },
-      { x: 800,  y: 648, w: 44, h: 44, health: 50, ability: AbilityType.Fire     },
-      { x: 950,  y: 540, w: 44, h: 44, health: 70, ability: AbilityType.None     },
-      { x: 1050, y: 648, w: 44, h: 44, health: 50, ability: AbilityType.Ice      },
-    ],
-    crates: [{ x: 430, y: 650 }, { x: 730, y: 650 }, { x: 1000, y: 440 }],
-    items: [{ x: 600, y: 340, type: 'heart' }, { x: 900, y: 440, type: 'mystery' }],
-  },
-
-  // F — vertical climb, top+right
-  {
-    name: 'Coolant Tower', ...COOLANT, worldWidth: W.small,
-    exits: ['right', 'top'],
-    platforms: [
-      { x: 200, y: 580, w: 180, h: 16 }, { x: 500, y: 490, w: 160, h: 16 },
-      { x: 800, y: 400, w: 160, h: 16 }, { x: 500, y: 310, w: 160, h: 16 },
-      { x: 800, y: 220, w: 160, h: 16 }, { x: 400, y: 140, w: 200, h: 16 },
-    ],
-    enemies: [
-      { x: 250,  y: 650, ability: AbilityType.Ice   },
-      { x: 600,  y: 470, ability: AbilityType.Fire  },
-      { x: 900,  y: 380, ability: AbilityType.Ice  },
-    ],
-    destructibles: [
-      { x: 650,  y: 290, w: 44, h: 44, health: 70, ability: AbilityType.None },
-      { x: 350,  y: 120, w: 44, h: 44, health: 80, ability: AbilityType.Ice  },
-    ],
-    crates: [{ x: 400, y: 650 }, { x: 700, y: 380 }],
-    items: [{ x: 500, y: 190, type: 'ability', ability: AbilityType.Fire }],
-  },
-
-  // G — wide room, drop platforms, left+right+bottom
-  {
-    name: 'Hangar Deck', ...BREACH, worldWidth: W.large,
-    exits: ['left', 'right', 'bottom'],
-    platforms: [
-      { x: 350,  y: 500, w: 200, h: 16 }, { x: 700,  y: 580, w: 200, h: 16 },
-      { x: 1000, y: 460, w: 240, h: 16 }, { x: 1350, y: 560, w: 200, h: 16 },
-      { x: 1650, y: 460, w: 200, h: 16 }, { x: 1900, y: 560, w: 200, h: 16 },
-    ],
-    enemies: [
-      { x: 400,  y: 650, ability: AbilityType.Fire     },
-      { x: 750,  y: 650, ability: AbilityType.Electric },
-      { x: 1100, y: 440, ability: AbilityType.Ice      },
-      { x: 1400, y: 650, ability: AbilityType.Ice     },
-      { x: 1700, y: 440, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 600,  y: 648, w: 44, h: 44, health: 70, ability: AbilityType.None },
-      { x: 1250, y: 440, w: 44, h: 44, health: 80, ability: AbilityType.Ice },
-      { x: 1800, y: 440, w: 44, h: 44, health: 70, ability: AbilityType.Fire },
-    ],
-    crates: [{ x: 900, y: 650 }, { x: 1600, y: 650 }],
-    items: [{ x: 1000, y: 340, type: 'heart' }, { x: 1650, y: 340, type: 'mystery' }],
-  },
-
-  // H — no enemies, loot room
-  {
-    name: 'Supply Cache', ...COMMAND, worldWidth: W.small,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 300, y: 540, w: 200, h: 16 }, { x: 600, y: 440, w: 200, h: 16 },
-      { x: 900, y: 540, w: 200, h: 16 },
-    ],
-    enemies: [],
-    destructibles: [
-      { x: 300,  y: 520, w: 44, h: 44, health: 60, ability: AbilityType.Electric },
-      { x: 500,  y: 648, w: 44, h: 44, health: 50, ability: AbilityType.Ice     },
-      { x: 700,  y: 648, w: 44, h: 44, health: 50, ability: AbilityType.Ice      },
-      { x: 900,  y: 520, w: 44, h: 44, health: 70, ability: AbilityType.Fire     },
-    ],
-    crates: [{ x: 450, y: 650 }, { x: 750, y: 420 }],
-    items: [
-      { x: 300,  y: 420, type: 'heart'   },
-      { x: 600,  y: 320, type: 'ability', ability: AbilityType.Electric },
-      { x: 900,  y: 420, type: 'heart'   },
-    ],
-  },
-
-  // I — gauntlet, heavy enemies
-  {
-    name: 'Security Wing', ...COMMAND, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 300,  y: 560, w: 160, h: 16 }, { x: 540,  y: 480, w: 140, h: 16 },
-      { x: 760,  y: 560, w: 140, h: 16 }, { x: 980,  y: 480, w: 140, h: 16 },
-      { x: 1200, y: 560, w: 140, h: 16 }, { x: 1400, y: 480, w: 140, h: 16 },
-    ],
-    enemies: [
-      { x: 300,  y: 650, ability: AbilityType.Electric },
-      { x: 550,  y: 460, ability: AbilityType.Ice      },
-      { x: 800,  y: 650, ability: AbilityType.Fire     },
-      { x: 1050, y: 460, ability: AbilityType.Ice     },
-      { x: 1250, y: 650, ability: AbilityType.Electric },
-      { x: 1450, y: 460, ability: AbilityType.Ice      },
-    ],
-    destructibles: [
-      { x: 680,  y: 648, w: 44, h: 44, health: 70, ability: AbilityType.None },
-      { x: 1100, y: 648, w: 44, h: 44, health: 70, ability: AbilityType.Fire },
-    ],
-    crates: [{ x: 450, y: 650 }, { x: 1300, y: 650 }],
-    items: [{ x: 800, y: 440, type: 'heart' }],
-  },
-
-  // J — mixed combat, left+right
-  {
-    name: 'Engine Room', ...REACTOR, worldWidth: W.large,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 400,  y: 540, w: 200, h: 16 }, { x: 800,  y: 460, w: 200, h: 16 },
-      { x: 1200, y: 540, w: 200, h: 16 }, { x: 1600, y: 460, w: 200, h: 16 },
-      { x: 600,  y: 360, w: 160, h: 16 }, { x: 1400, y: 360, w: 160, h: 16 },
-    ],
-    enemies: [
-      { x: 450,  y: 650, ability: AbilityType.Fire     },
-      { x: 850,  y: 440, ability: AbilityType.Electric },
-      { x: 1050, y: 650, ability: AbilityType.Ice     },
-      { x: 1250, y: 650, ability: AbilityType.Ice      },
-      { x: 1650, y: 440, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 700,  y: 340, w: 44, h: 44, health: 80, ability: AbilityType.Ice },
-      { x: 1500, y: 340, w: 44, h: 44, health: 80, ability: AbilityType.Ice  },
-      { x: 950,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.None },
-    ],
-    crates: [{ x: 650, y: 650 }, { x: 1400, y: 650 }, { x: 1750, y: 650 }],
-    items: [{ x: 1200, y: 420, type: 'mystery' }, { x: 600, y: 240, type: 'heart' }],
-  },
-
-  // K — top+right, platform gaps
-  {
-    name: 'Observation Deck', ...BREACH, worldWidth: W.medium,
-    exits: ['right', 'top'],
-    platforms: [
-      { x: 240,  y: 580, w: 180, h: 16 }, { x: 520,  y: 500, w: 160, h: 16 },
-      { x: 780,  y: 420, w: 160, h: 16 }, { x: 1040, y: 340, w: 160, h: 16 },
-      { x: 1300, y: 260, w: 200, h: 16 }, { x: 600,  y: 200, w: 160, h: 16 },
-    ],
-    enemies: [
-      { x: 300,  y: 650, ability: AbilityType.Ice     },
-      { x: 600,  y: 480, ability: AbilityType.Fire     },
-      { x: 900,  y: 400, ability: AbilityType.Electric },
-    ],
-    destructibles: [
-      { x: 520,  y: 480, w: 44, h: 44, health: 60, ability: AbilityType.None     },
-      { x: 1040, y: 320, w: 44, h: 44, health: 80, ability: AbilityType.Electric },
-    ],
-    crates: [{ x: 400, y: 650 }, { x: 850, y: 400 }],
-    items: [{ x: 1300, y: 140, type: 'ability', ability: AbilityType.Ice }],
-  },
-
-  // L — complex, left+right+top
-  {
-    name: 'Command Level', ...COMMAND, worldWidth: W.medium,
-    exits: ['left', 'right', 'top'],
-    platforms: [
-      { x: 280,  y: 580, w: 180, h: 16 }, { x: 560,  y: 500, w: 160, h: 16 },
-      { x: 800,  y: 420, w: 200, h: 16 }, { x: 1080, y: 340, w: 160, h: 16 },
-      { x: 1340, y: 500, w: 160, h: 16 }, { x: 700,  y: 240, w: 200, h: 16 },
-    ],
-    enemies: [
-      { x: 350,  y: 650, ability: AbilityType.Ice      },
-      { x: 640,  y: 480, ability: AbilityType.Ice     },
-      { x: 950,  y: 400, ability: AbilityType.Electric },
-      { x: 1200, y: 320, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 460,  y: 648, w: 44, h: 44, health: 70, ability: AbilityType.Fire },
-      { x: 800,  y: 400, w: 44, h: 44, health: 70, ability: AbilityType.Ice },
-    ],
-    crates: [{ x: 700, y: 650 }, { x: 1150, y: 650 }],
-    items: [{ x: 700, y: 120, type: 'heart' }, { x: 1080, y: 220, type: 'mystery' }],
-  },
-
-  // M — ice+bomb heavy, left+right
-  {
-    name: 'Cryo Bay', ...COOLANT, worldWidth: W.small,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 250, y: 560, w: 160, h: 16 }, { x: 500, y: 460, w: 160, h: 16 },
-      { x: 750, y: 560, w: 160, h: 16 }, { x: 1000, y: 460, w: 160, h: 16 },
-    ],
-    enemies: [
-      { x: 300,  y: 650, ability: AbilityType.Ice  },
-      { x: 550,  y: 440, ability: AbilityType.Ice },
-      { x: 800,  y: 650, ability: AbilityType.Ice  },
-      { x: 1050, y: 440, ability: AbilityType.Ice },
-    ],
-    destructibles: [
-      { x: 420,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.Ice  },
-      { x: 680,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.Ice },
-      { x: 900,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.None },
-    ],
-    crates: [{ x: 600, y: 650 }],
-    items: [{ x: 600, y: 340, type: 'ability', ability: AbilityType.Ice }],
-  },
-
-  // O — fire gauntlet, left+top
-  {
-    name: 'Furnace Block', ...REACTOR, worldWidth: W.small,
-    exits: ['left', 'top'],
-    platforms: [
-      { x: 200, y: 560, w: 160, h: 16 }, { x: 450, y: 460, w: 160, h: 16 },
-      { x: 700, y: 360, w: 160, h: 16 }, { x: 950, y: 260, w: 160, h: 16 },
-    ],
-    enemies: [
-      { x: 250,  y: 650, ability: AbilityType.Fire },
-      { x: 500,  y: 440, ability: AbilityType.Fire },
-      { x: 750,  y: 340, ability: AbilityType.Fire },
-    ],
-    destructibles: [
-      { x: 350,  y: 540, w: 44, h: 44, health: 60, ability: AbilityType.None },
-      { x: 600,  y: 340, w: 44, h: 44, health: 70, ability: AbilityType.Fire },
-    ],
-    crates: [{ x: 850, y: 650 }],
-    items: [{ x: 950, y: 140, type: 'ability', ability: AbilityType.Fire }],
-  },
-
-  // Q — catwalk: narrow elevated passage, exits near top of walls
-  {
-    name: 'Catwalk', ...BREACH, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    exitPositions: { left: 360, right: 360 },
-    platforms: [
-      // Main walkway
-      { x: 800,  y: 380, w: 1100, h: 16 },
-      // Nothing else — open void below, ceiling above
-    ],
-    enemies: [
-      { x: 400,  y: 340, ability: AbilityType.Fire     },  // flying, patrols walkway
-      { x: 700,  y: 340, ability: AbilityType.Fire     },
-      { x: 1000, y: 340, ability: AbilityType.Fire     },
-      { x: 400,  y: 650, ability: AbilityType.Electric },  // on floor below, hard to reach
-      { x: 1000, y: 650, ability: AbilityType.Ice      },
-    ],
-    destructibles: [
-      { x: 550, y: 360, w: 40, h: 40, health: 60, ability: AbilityType.Electric },
-      { x: 950, y: 360, w: 40, h: 40, health: 60, ability: AbilityType.Fire     },
-    ],
-    crates: [{ x: 700, y: 360 }, { x: 1100, y: 360 }],
-    items: [
-      { x: 800, y: 260, type: 'ability', ability: AbilityType.Ice },
-      { x: 600, y: 640, type: 'heart' },
-    ],
-  },
-
-  // R — sloped hall: diagonal floor from low-left to high-right
-  {
-    name: 'Sloped Hall', ...REACTOR, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    exitPositions: { left: 660, right: 200 },
-    platforms: [],
-    slopes: [
-      { x1: 60, y1: 680, x2: 1540, y2: 140 },  // main diagonal floor
-    ],
-    enemies: [
-      { x: 250,  y: 650, ability: AbilityType.Ice      },
-      { x: 550,  y: 490, ability: AbilityType.Electric },
-      { x: 850,  y: 360, ability: AbilityType.Ice      },
-      { x: 1150, y: 230, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 430,  y: 500, w: 40, h: 40, health: 60, ability: AbilityType.None },
-      { x: 730,  y: 370, w: 40, h: 40, health: 70, ability: AbilityType.Ice  },
-    ],
-    crates: [{ x: 340, y: 650 }, { x: 980, y: 370 }],
-    items: [
-      { x: 550,  y: 400, type: 'mystery' },
-      { x: 1400, y: 100, type: 'ability', ability: AbilityType.Fire },
-    ],
-  },
-
-  // T — barrier gauntlet: narrow barriers force jumps across the room
-  {
-    name: 'Barrier Run', ...COMMAND, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    platforms: [
-      // Low barriers — jump over them
-      { x: 340,  y: 620, w: 16, h: 140 },
-      { x: 660,  y: 600, w: 16, h: 120 },
-      { x: 980,  y: 580, w: 16, h: 100 },
-      { x: 1300, y: 560, w: 16, h: 80  },
-      // Mid-height ledges above each gap — drop down or jump up to them
-      { x: 220,  y: 480, w: 180, h: 16 },
-      { x: 540,  y: 440, w: 180, h: 16 },
-      { x: 820,  y: 400, w: 180, h: 16 },
-      { x: 1120, y: 360, w: 180, h: 16 },
-    ],
-    enemies: [
-      { x: 230,  y: 650, ability: AbilityType.Ice      },
-      { x: 480,  y: 650, ability: AbilityType.Electric },
-      { x: 800,  y: 650, ability: AbilityType.Fire     },
-      { x: 1100, y: 650, ability: AbilityType.Ice      },
-      { x: 1400, y: 650, ability: AbilityType.Electric },
-    ],
-    destructibles: [
-      { x: 220, y: 460, w: 40, h: 40, health: 60, ability: AbilityType.Electric },
-      { x: 820, y: 380, w: 40, h: 40, health: 60, ability: AbilityType.Ice      },
-    ],
-    crates: [{ x: 540, y: 420 }, { x: 1120, y: 340 }],
-    items: [{ x: 980, y: 260, type: 'heart' }, { x: 1400, y: 540, type: 'mystery' }],
-  },
-
-  // U — diagonal ceiling: slope descends from left-high to right-low, forcing crouch/jump
-  {
-    name: 'Wedge Corridor', ...REACTOR, worldWidth: W.medium,
-    exits: ['left', 'right'],
-    platforms: [
-      // Wide ledge on right side — platform above the sloped ceiling level
-      { x: 1350, y: 320, w: 200, h: 16 },
-    ],
-    slopes: [
-      { x1: 60, y1: 120, x2: 1100, y2: 560 },  // descending ceiling obstacle
-    ],
-    enemies: [
-      { x: 350,  y: 650, ability: AbilityType.Ice      },
-      { x: 650,  y: 650, ability: AbilityType.Electric },
-      { x: 900,  y: 650, ability: AbilityType.Fire     },
-      { x: 1350, y: 300, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 500, y: 648, w: 44, h: 44, health: 70, ability: AbilityType.None },
-      { x: 800, y: 648, w: 44, h: 44, health: 70, ability: AbilityType.Ice  },
-    ],
-    crates: [{ x: 300, y: 650 }, { x: 1200, y: 650 }],
-    items: [
-      { x: 1350, y: 200, type: 'ability', ability: AbilityType.Electric },
-      { x: 650,  y: 540, type: 'heart' },
-    ],
-  },
-
-  // S — offset shaft: top and bottom exits both on left side
-  {
-    name: 'Drop Shaft', ...NAVBAY, worldWidth: W.medium,
-    exits: ['top', 'bottom'],
-    exitPositions: { top: 240, bottom: 240 },
-    platforms: [
-      // Left shaft platforms
-      { x: 160, y: 560, w: 180, h: 16 },
-      { x: 260, y: 440, w: 160, h: 16 },
-      { x: 160, y: 320, w: 160, h: 16 },
-      { x: 260, y: 200, w: 160, h: 16 },
-      // Right arena platforms
-      { x: 750,  y: 520, w: 200, h: 16 },
-      { x: 1050, y: 420, w: 200, h: 16 },
-      { x: 850,  y: 300, w: 200, h: 16 },
-      { x: 1200, y: 560, w: 180, h: 16 },
-    ],
-    enemies: [
-      { x: 750,  y: 500, ability: AbilityType.Electric },
-      { x: 1050, y: 400, ability: AbilityType.Ice      },
-      { x: 850,  y: 280, ability: AbilityType.Electric },
-      { x: 1200, y: 540, ability: AbilityType.Fire     },
-    ],
-    destructibles: [
-      { x: 200,  y: 300, w: 40, h: 40, health: 60, ability: AbilityType.None },
-      { x: 950,  y: 400, w: 40, h: 40, health: 70, ability: AbilityType.Ice  },
-    ],
-    crates: [{ x: 160, y: 540 }, { x: 1100, y: 540 }],
-    items: [
-      { x: 260, y: 100, type: 'heart' },
-      { x: 850, y: 180, type: 'ability', ability: AbilityType.Electric },
-    ],
-  },
-
-  // P — wide open combat
-  {
-    name: 'Parade Deck', ...BREACH, worldWidth: W.large,
-    exits: ['left', 'right'],
-    platforms: [
-      { x: 500,  y: 500, w: 240, h: 16 }, { x: 1000, y: 420, w: 240, h: 16 },
-      { x: 1500, y: 500, w: 240, h: 16 }, { x: 750,  y: 320, w: 200, h: 16 },
-      { x: 1250, y: 320, w: 200, h: 16 },
-    ],
-    enemies: [
-      { x: 350,  y: 650, ability: AbilityType.Ice     },
-      { x: 700,  y: 650, ability: AbilityType.Electric },
-      { x: 1000, y: 400, ability: AbilityType.Fire     },
-      { x: 1300, y: 650, ability: AbilityType.Ice      },
-      { x: 1600, y: 400, ability: AbilityType.Ice     },
-      { x: 1800, y: 650, ability: AbilityType.Electric },
-    ],
-    destructibles: [
-      { x: 850,  y: 300, w: 44, h: 44, health: 80, ability: AbilityType.Ice },
-      { x: 1350, y: 300, w: 44, h: 44, health: 80, ability: AbilityType.Fire },
-    ],
-    crates: [{ x: 600, y: 480 }, { x: 1100, y: 400 }, { x: 1750, y: 480 }],
-    items: [{ x: 1000, y: 300, type: 'heart' }, { x: 500, y: 380, type: 'mystery' }],
-  },
-]
-
-// ─── Boss Room (only reachable through Throne Room door) ─────────────────────
-export const BOSS_ROOM: RoomConfig = {
-  name: 'The Bridge', ...BRIDGE_T, worldWidth: W.medium,
-  exits: ['left'],
+  exitPositions: { left: 1280 },  // player entry y — above the main floor at y=1312
   isBossRoom: true,
-  bossHp: 10,
-  bossSpawnX: 900,
+  bossHp: 15,
+  bossSpawnX: 800,
+  bossSpawnY: 900,   // flying boss, starts mid-room
   platforms: [
-    { x: 300,  y: 560, w: 200, h: 16 }, { x: 700,  y: 460, w: 200, h: 16 },
-    { x: 1100, y: 560, w: 200, h: 16 }, { x: 1400, y: 460, w: 200, h: 16 },
+    { x: 800,  y: 1584, w: 1600, h: 32 },  // bottom seal
+    { x: 1584, y: 800,  w: 32,  h: 1600 }, // right-wall seal
   ],
   enemies: [],
-  destructibles: [
-    { x: 500,  y: 648, w: 44, h: 44, health: 60, ability: AbilityType.None },
-    { x: 1200, y: 648, w: 44, h: 44, health: 60, ability: AbilityType.None },
-  ],
+  destructibles: [],
   crates: [],
-  items: [{ x: 400, y: 540, type: 'heart' }, { x: 1200, y: 540, type: 'heart' }],
+  items: [
+    { x: 400,  y: 1260, type: 'heart' },
+    { x: 1300, y: 1260, type: 'heart' },
+  ],
 }
 
-export const RUN_LENGTH = 15   // tutorial + 12 random + throne + boss
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
+export const RUN_LENGTH = 2
 
 export function generateRun(): RoomConfig[] {
-  // Only place rooms that have at least one forward exit (right or top) so the
-  // run is never blocked by a dead-end room in the middle.
-  const forwardPool = POOL.filter(r => r.exits.includes('right') || r.exits.includes('top'))
-  const normal = shuffle(forwardPool).slice(0, 12)
-  return [TUTORIAL_ROOM, ...normal, THRONE_ROOM, BOSS_ROOM]
+  return [WORLD_ROOM, BOSS_TILEMAP_ROOM]
 }
 
-// Legacy aliases kept so nothing else breaks until fully migrated
-export const WORLD_NAMES = ['ORBITAL STATION', 'ASTEROID BELT', 'MOLTEN CORE']
-export const ROOMS_PER_RUN = 5
-export const LEVEL_POOLS: RoomConfig[][] = [[...POOL]]
+// Legacy aliases
+export const BOSS_ROOM: RoomConfig = BOSS_TILEMAP_ROOM
+export const TUTORIAL_ROOM: RoomConfig = { ...WORLD_ROOM, isTutorial: true }
+export const THRONE_ROOM:  RoomConfig  = { ...WORLD_ROOM, isThrone: true  }
+export const WORLD_NAMES = ['THE CASTLE', 'THE DARK SANCTUM']
+export const ROOMS_PER_RUN = 2
+export const LEVEL_POOLS: RoomConfig[][] = [[WORLD_ROOM]]
 export type LevelConfig = RoomConfig & { roomNum: number; subtitle: string; levelNum: number; goalX: number }
 export function generateRoomSequence(_level: number): number[] { return [0] }
