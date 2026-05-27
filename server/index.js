@@ -42,7 +42,7 @@ wss.on('connection', (ws) => {
     switch (msg.type) {
       case 'createRoom': {
         const code = genCode()
-        room = { code, players: [{ ws, id: 0 }], started: false }
+        room = { code, players: [{ ws, id: 0, charConfirmed: false, charIdx: 0 }], started: false }
         rooms.set(code, room)
         playerId = 0
         send(ws, { type: 'roomCreated', code, playerId: 0 })
@@ -57,7 +57,7 @@ wss.on('connection', (ws) => {
         if (target.players.length >= 4) { send(ws, { type: 'error', text: 'Room is full (max 4)' }); break }
 
         playerId = target.players.length
-        target.players.push({ ws, id: playerId })
+        target.players.push({ ws, id: playerId, charConfirmed: false, charIdx: 0 })
         room = target
 
         const ids = room.players.map(p => p.id)
@@ -70,9 +70,24 @@ wss.on('connection', (ws) => {
         if (!room || playerId !== 0) break // host only
         if (room.started) break
         room.started = true
+        // Reset char confirmations for the new session
+        for (const p of room.players) { p.charConfirmed = false; p.charIdx = 0 }
         const playerCount = room.players.length
         broadcast(room, { type: 'gameStart', playerCount }, ws)
         send(ws, { type: 'gameStart', playerCount })
+        break
+      }
+
+      case 'charConfirm': {
+        if (!room) break
+        const cp = room.players.find(p => p.id === playerId)
+        if (cp) { cp.charConfirmed = true; cp.charIdx = msg.charIdx ?? 0 }
+        broadcast(room, { type: 'remoteCharConfirm', playerId, charIdx: msg.charIdx ?? 0 }, ws)
+        if (room.players.every(p => p.charConfirmed)) {
+          const charIdxs = room.players.map(p => p.charIdx ?? 0)
+          const allMsg = { type: 'allCharsConfirmed', charIdxs }
+          for (const p of room.players) send(p.ws, allMsg)
+        }
         break
       }
 

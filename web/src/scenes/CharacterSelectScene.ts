@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { BootScene } from './BootScene'
+import { NetworkManager } from '../network/NetworkManager'
 
 const FONT = '"Press Start 2P", monospace'
 const PLAYER_COLORS    = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
@@ -133,6 +134,27 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.backBtn.on('pointerout',  () => this.backBtn.setStyle({ color: this.backFocused ? '#ffffff' : '#7799aa' }))
     this.backBtn.on('pointerdown', () => this.goBack())
 
+    // Multiplayer: sync confirmations through server
+    const nm: NetworkManager | null = this.registry.get('networkManager') ?? null
+    if (nm && this.isMultiplayer) {
+      nm.onRemoteCharConfirm = (pid, charIdx) => {
+        if (pid < 0 || pid >= this.playerCount) return
+        this.selections[pid] = charIdx
+        this.confirmed[pid] = true
+        this.confirmMarks[pid]?.setVisible(true)
+        this.updateCursorPos(pid)
+        this.updateStartText()
+      }
+      nm.onAllCharsConfirmed = (charIdxs) => {
+        if (this.started) return
+        this.started = true
+        const selectedChars = charIdxs.map(idx => this.chars[idx]?.key ?? this.chars[0].key)
+        this.registry.set('selectedChars', selectedChars)
+        this.cameras.main.fadeOut(400, 0, 0, 0)
+        this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+      }
+    }
+
     // Keyboard input
     const kb = this.input.keyboard!
     if (this.isMultiplayer) {
@@ -213,9 +235,12 @@ export class CharacterSelectScene extends Phaser.Scene {
 
   private confirm(player: number) {
     if (this.confirmed[player]) {
-      this.confirmed[player] = false
-      this.confirmMarks[player].setVisible(false)
-      this.updateStartText()
+      // In multiplayer, once confirmed you can't take it back (server already received it)
+      if (!this.isMultiplayer) {
+        this.confirmed[player] = false
+        this.confirmMarks[player].setVisible(false)
+        this.updateStartText()
+      }
       return
     }
     this.confirmed[player] = true
@@ -223,7 +248,8 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.updateCursorPos(player)
     this.updateStartText()
     if (this.isMultiplayer) {
-      if (this.confirmed[this.localPlayerId]) this.startScene()
+      const nm: NetworkManager | null = this.registry.get('networkManager') ?? null
+      nm?.sendCharConfirm(this.selections[this.localPlayerId])
     } else {
       if (this.confirmed.every(Boolean)) this.startScene()
     }
@@ -258,13 +284,7 @@ export class CharacterSelectScene extends Phaser.Scene {
   private tryStart() {
     if (this.started) return
     if (this.isMultiplayer) {
-      if (!this.confirmed[this.localPlayerId]) {
-        this.confirmed[this.localPlayerId] = true
-        this.confirmMarks[this.localPlayerId].setVisible(true)
-        this.updateCursorPos(this.localPlayerId)
-        this.updateStartText()
-      }
-      this.startScene()
+      if (!this.confirmed[this.localPlayerId]) this.confirm(this.localPlayerId)
       return
     }
     if (this.playerCount === 1 && !this.confirmed[0]) {
