@@ -15,6 +15,7 @@ export class IntroScene extends Phaser.Scene {
     this.load.image('intro-carter', 'assets/gifs/carter.gif')
     this.load.image('intro-callum', 'assets/gifs/callum.gif')
     this.load.image('intro-conrad', 'assets/gifs/conrad.gif')
+    this.load.image('intro-splat',  'assets/splat.png')
   }
 
   create() {
@@ -59,7 +60,7 @@ export class IntroScene extends Phaser.Scene {
       : null
 
     const nameText = this.add.text(cx, cy + 92, 'JACK', {
-      fontSize: '18px', fontFamily: FONT, color: '#ffe066',
+      fontSize: '18px', fontFamily: FONT, color: '#4b4a4d',
       stroke: '#000000', strokeThickness: 5,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
 
@@ -78,7 +79,7 @@ export class IntroScene extends Phaser.Scene {
     const label = this.label(cx, cy - 80, 'INSPIRED BY')
 
     const nameText = this.add.text(cx, cy + 120, 'THE BOYS', {
-      fontSize: '22px', fontFamily: FONT, color: '#ff80ab',
+      fontSize: '22px', fontFamily: FONT, color: '#f23906',
       stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
 
@@ -110,8 +111,8 @@ export class IntroScene extends Phaser.Scene {
 
     const label = this.label(cx, cy - 50, 'DEVELOPED BY')
 
-    const name = this.add.text(cx, cy + 16, 'CLAUDE', {
-      fontSize: '46px', fontFamily: FONT, color: '#80d8ff',
+    const name = this.add.text(0, cy + 16, 'CLAUDE', {
+      fontSize: '46px', fontFamily: FONT, color: '#3b4447',
       stroke: '#000000', strokeThickness: 10,
     }).setOrigin(0.5).setAlpha(0).setScale(0.7)
 
@@ -119,13 +120,21 @@ export class IntroScene extends Phaser.Scene {
       fontSize: '9px', fontFamily: FONT, color: '#445566',
     }).setOrigin(0.5).setAlpha(0)
 
-    const splatL = this.makeSplat(cx - 172, cy + 16)
-    const splatR = this.makeSplat(cx + 172, cy + 16)
-    splatL.setAlpha(0)
-    splatR.setAlpha(0)
+    const splatW = 52
+    const gap = 10
+    const textW = name.width
+    const groupW = splatW + gap + textW
+    const splatX = cx - groupW / 2 + splatW / 2
+    const textX  = cx - groupW / 2 + splatW + gap + textW / 2
+    name.setX(textX)
+
+    const useSplatImg = this.textures.exists('intro-splat')
+    const splatL = useSplatImg
+      ? this.add.image(splatX, cy + 16, 'intro-splat').setDisplaySize(splatW, splatW).setAlpha(0)
+      : (() => { const g = this.makeSplat(splatX, cy + 16); g.setAlpha(0); return g })()
 
     const [lineL, lineR] = this.lines(cx, cy - 50)
-    const objs = [label, name, sub, splatL, splatR]
+    const objs = [label, name, sub, splatL]
 
     this.animSlide(startAt, objs, [lineL, lineR], name)
   }

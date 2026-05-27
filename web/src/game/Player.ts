@@ -15,7 +15,7 @@ const SPIT_VY           = -320
 export const ABILITY_AMMO: Record<AbilityType, number> = {
   [AbilityType.None]:     0,
   [AbilityType.Fire]:     10,
-  [AbilityType.Electric]: 3,
+  [AbilityType.Lightning]: 3,
   [AbilityType.Ice]:      10,
 }
 
@@ -29,6 +29,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isInhaled     = false
   speedMultiplier  = 1.0
   controlsReversed = false
+  speedBoostActive    = false
+  strengthBoostActive = false
 
   private hitCount        = 0
   private isFloating      = false
@@ -88,7 +90,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   jump() {
     const body = this.body as Phaser.Physics.Arcade.Body
     if (body.blocked.down) {
-      body.setVelocityY(JUMP_VELOCITY)
+      body.setVelocityY(JUMP_VELOCITY * this.speedMultiplier)
       this.isFloating = false
     } else if (!this.isFloating) {
       this.isFloating = true
@@ -96,6 +98,25 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   jumpReleased() { this.isFloating = false }
+
+  applySpeedBoost(permanent: boolean) {
+    this.speedMultiplier = 5.0
+    this.speedBoostActive = true
+    if (!permanent) {
+      this.scene.time.delayedCall(30000, () => {
+        if (this.active) { this.speedMultiplier = 1.0; this.speedBoostActive = false }
+      })
+    }
+  }
+
+  applyStrengthBoost(permanent: boolean) {
+    this.strengthBoostActive = true
+    if (!permanent) {
+      this.scene.time.delayedCall(30000, () => {
+        if (this.active) this.strengthBoostActive = false
+      })
+    }
+  }
 
   applyTempEffect(type: 'fast' | 'reverse', ms: number) {
     if (type === 'fast') {
@@ -113,7 +134,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   update() {
     if (!this.isAlive || this.isInhaled) return
     const body = this.body as Phaser.Physics.Arcade.Body
-    body.setGravityY(this.isFloating ? FLOAT_GRAVITY : 0)
+    body.setGravityY(this.isFloating ? FLOAT_GRAVITY * this.speedMultiplier : 0)
     if (body.blocked.down) this.isFloating = false
 
     if (this.inhaledObject) {

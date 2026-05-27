@@ -68,7 +68,7 @@ const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?
         ability: { start: 11, end: 11 },
       }
     },
-  abby:    { file: 'abby.png',              fw: 64, fh: 64, selectable: true, name: 'ABBY',    previewFrame: 15,
+  abby:    { file: 'abby.png',              fw: 64, fh: 64, selectable: true, name: 'ABBY',    previewFrame: 5,
     anim: {
         idle:   { start: 5, end: 5 },
         walk:   { start: 0, end: 2 },
@@ -81,7 +81,7 @@ const SHEETS: Record<string, { file: string; fw: number; fh: number; selectable?
         ability: { start: 10, end: 10 },
       }
     },
-  scarlet: { file: 'scarlet.png',           fw: 64, fh: 64, selectable: true, name: 'SCARLET', previewFrame: 15,
+  scarlett: { file: 'scarlett.png',           fw: 64, fh: 64, selectable: true, name: 'SCARLETT', previewFrame: 15,
     anim: {
         idle:   { start: 15, end: 15 },
         walk:   { start: 1, end: 5 },
@@ -145,12 +145,15 @@ export class BootScene extends Phaser.Scene {
     for (const { key, file, fw, fh } of ENEMY_SHEETS) {
       this.load.spritesheet(key, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
     }
-    for (const c of ['callum', 'carter', 'conrad', 'coco', 'abby', 'eric', 'scarlet']) {
+    for (const c of ['callum', 'carter', 'conrad', 'coco', 'abby', 'eric', 'scarlett']) {
       this.load.image(`head-${c}`, `assets/${c}_head.png`)
     }
     this.load.image('fire_ability_icon',      'assets/fire_ability_icon.png')
     this.load.image('lightning_ability_icon', 'assets/lightning_ability_icon.png')
     this.load.image('ice_ability_icon',       'assets/ice_ability_icon.png')
+    this.load.image('empty_ability_icon',     'assets/empty_ability.png')
+    this.load.image('speed_boost_icon',       'assets/speed.png')
+    this.load.image('strength_boost_icon',    'assets/strength.png')
     this.load.image('fire_ability',           'assets/fire_ability.png')
     this.load.image('lightning_ability',      'assets/lightning_ability.png')
     this.load.image('ice_ability',            'assets/ice_ability.png')
@@ -161,10 +164,19 @@ export class BootScene extends Phaser.Scene {
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
     this.load.image('tileset', 'tileset/one/spritesheet.png')
-    this.load.tilemapTiledJSON('boss-map', 'tileset/boss/map.json')
-    this.load.image('boss-tileset', 'tileset/boss/spritesheet.png')
-    this.load.tilemapTiledJSON('world-map-two', 'tileset/two/map.json')
-    this.load.image('tileset-two', 'tileset/two/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-one',   'tileset/boss_one/map.json')
+    this.load.image('boss-tileset-one',          'tileset/boss_one/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-two',   'tileset/boss_two/map.json')
+    this.load.image('boss-tileset-two',          'tileset/boss_two/spritesheet.png')
+    this.load.tilemapTiledJSON('boss-map-three', 'tileset/boss_three/map.json')
+    this.load.image('boss-tileset-three',        'tileset/boss_three/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-two',   'tileset/two/map.json')
+    this.load.image('tileset-two',               'tileset/two/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-three', 'tileset/three/map.json')
+    this.load.image('tileset-three',             'tileset/three/spritesheet.png')
+    this.load.audio('music-title',    'assets/music/title_menu.mp3')
+    this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
+    this.load.audio('music-boss',     'assets/music/boss_dragon.mp3')
   }
 
   create() {
@@ -358,7 +370,7 @@ export class BootScene extends Phaser.Scene {
     al.fillTriangle(32, 42, 34, 44, 36, 42); al.fillTriangle(34, 42, 36, 44, 38, 42)
     al.generateTexture('enemy-alien', 40, 44); al.destroy()
 
-    // Cyberbot (Electric ability) — 40×44
+    // Cyberbot (Lightning ability) — 40×44
     const cb = this.g()
     // Shoulder pauldrons
     cb.fillStyle(0x546e7a); cb.fillRect(2, 18, 12, 8); cb.fillRect(26, 18, 12, 8)
@@ -984,11 +996,11 @@ export class BootScene extends Phaser.Scene {
     ifire.generateTexture('icon-fire', 16, 16); ifire.destroy()
 
 
-    const ielec = this.g()
-    ielec.fillStyle(0xffdd00)
-    ielec.fillRect(9, 1, 4, 6); ielec.fillRect(5, 7, 6, 2); ielec.fillRect(3, 9, 4, 6)
-    ielec.fillStyle(0xffffff); ielec.fillRect(10, 2, 2, 3)
-    ielec.generateTexture('icon-electric', 16, 16); ielec.destroy()
+    const ilightning = this.g()
+    ilightning.fillStyle(0xffdd00)
+    ilightning.fillRect(9, 1, 4, 6); ilightning.fillRect(5, 7, 6, 2); ilightning.fillRect(3, 9, 4, 6)
+    ilightning.fillStyle(0xffffff); ilightning.fillRect(10, 2, 2, 3)
+    ilightning.generateTexture('icon-lightning', 16, 16); ilightning.destroy()
 
     const iice = this.g()
     iice.fillStyle(0x88ddff)

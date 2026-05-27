@@ -24,4 +24,5 @@ No download. No install. Just vibes and dragon-slaying.
 
 ---
 
+*Sprites built with [Pixel Lab](https://www.pixellab.ai/) · Maps built with [Sprite Fusion](https://www.spritefusion.com/) · Music built with [Gemini](https://gemini.google.com/)*  
 *Built with [Phaser 3](https://phaser.io/) · Multiplayer powered by WebSockets · Server deployed on [Railway](https://railway.app/)*

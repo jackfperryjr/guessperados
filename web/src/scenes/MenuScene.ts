@@ -41,8 +41,10 @@ export class MenuScene extends Phaser.Scene {
     this.setupGamepad()
     this.setupControllerStatus()
 
-    // Play intro fanfare on the very first user gesture (menu is the first interactive screen)
-    SoundManager.whenUnlocked(() => SoundManager.playIntroTheme())
+    SoundManager.whenUnlocked(() => {
+      SoundManager.playIntroTheme()
+      SoundManager.startTrack(this.sound, 'music-title')
+    })
   }
 
   private setupControllerStatus() {

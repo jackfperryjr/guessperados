@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
+import { generateRun } from '../levels'
 
 const FONT = '"Press Start 2P", monospace'
 
@@ -82,9 +83,6 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private buildUI(cx: number, cy: number) {
-    const runIndex: number = this.registry.get('runIndex') ?? 0
-    const beatLevel2 = runIndex >= 3
-
     // Title — slides down from above
     const title = this.add.text(cx, cy - 260, 'YOU WIN!', {
       fontSize: '60px', fontFamily: FONT, color: '#ffe066',
@@ -92,13 +90,13 @@ export class VictoryScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0)
 
     // Message lines
-    const msg1 = this.add.text(cx, cy - 70, beatLevel2 ? 'TWO LEVELS DOWN!' : 'ONE LEVEL DOWN,', {
+    const msg1 = this.add.text(cx, cy - 70, 'ALL ENEMIES DEFEATED!', {
       fontSize: '18px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setAlpha(0)
 
-    const msg2 = this.add.text(cx, cy - 30, beatLevel2 ? 'DAD HAS BEEN SLAIN!' : 'MORE TO COME SOON!', {
-      fontSize: '18px', fontFamily: FONT, color: beatLevel2 ? '#ffb3c6' : '#80d8ff',
+    const msg2 = this.add.text(cx, cy - 30, 'THE DUNGEON IS YOURS!', {
+      fontSize: '18px', fontFamily: FONT, color: '#ffb3c6',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setAlpha(0)
 
@@ -106,39 +104,45 @@ export class VictoryScene extends Phaser.Scene {
     const sep = this.add.rectangle(cx, cy + 30, 400, 1, 0x334466, 0).setOrigin(0.5)
 
     // Buttons
-    const btnAgain = this.menuButton(cx - 160, cy + 120, 'PLAY AGAIN').setAlpha(0)
-    const btnQuit  = this.menuButton(cx + 160, cy + 120, 'QUIT').setAlpha(0)
+    const btnMenu     = this.menuButton(cx - 160, cy + 120, 'MAIN MENU').setAlpha(0)
+    const btnContinue = this.menuButton(cx + 160, cy + 120, 'CONTINUE').setAlpha(0)
 
-    btnAgain.on('pointerdown', () => {
+    btnMenu.on('pointerdown', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.registry.set('runRooms',  null)
-        this.registry.set('runIndex',  0)
-        this.registry.set('entryDir',  null)
+        this.registry.set('runRooms',         null)
+        this.registry.set('runIndex',         0)
+        this.registry.set('entryDir',         null)
         this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts', null)
-        this.registry.set('score',     0)
+        this.registry.set('persistedHearts',  null)
+        this.registry.set('score',            0)
+        this.registry.set('dadDefeated',      false)
+        this.registry.set('momDefeated',      false)
         this.scene.start('MenuScene')
       })
     })
 
-    btnQuit.on('pointerdown', () => {
+    btnContinue.on('pointerdown', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.registry.set('runRooms',  null)
-        this.registry.set('runIndex',  0)
-        this.registry.set('entryDir',  null)
+        const rooms = generateRun()
+        this.registry.set('runRooms',         rooms)
+        this.registry.set('runIndex',         5)   // BOSS_THREE_ROOM = Mom's Lair
+        this.registry.set('entryDir',         'left')
         this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts', null)
-        this.registry.set('score',     0)
-        this.scene.start('MenuScene')
+        this.registry.set('persistedHearts',  null)
+        this.registry.set('lives',            3)
+        this.registry.set('score',            0)
+        this.registry.set('dadDefeated',      true)
+        this.registry.set('momDefeated',      true)
+        this.scene.start('GameScene')
       })
     })
 
     // Register buttons for gamepad navigation
     this.menuItems = [
-      { text: btnAgain, action: () => btnAgain.emit('pointerdown') },
-      { text: btnQuit,  action: () => btnQuit.emit('pointerdown')  },
+      { text: btnMenu,     action: () => btnMenu.emit('pointerdown')     },
+      { text: btnContinue, action: () => btnContinue.emit('pointerdown') },
     ]
 
     // Animation sequence
@@ -158,7 +162,7 @@ export class VictoryScene extends Phaser.Scene {
           targets: msg2, alpha: 1, duration: 400, delay: 350,
           onComplete: () => {
             this.tweens.add({ targets: sep, alpha: 0.5, duration: 500 })
-            this.tweens.add({ targets: [btnAgain, btnQuit], alpha: 1, duration: 400, delay: 200 })
+            this.tweens.add({ targets: [btnMenu, btnContinue], alpha: 1, duration: 400, delay: 200 })
           },
         })
       },
