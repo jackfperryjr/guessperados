@@ -22,6 +22,8 @@ export class NetworkManager {
   onPlayerLeft?: (id: number) => void
   onGameStart?: (playerCount: number) => void
   onRemoteInput?: (id: number, input: RemoteInput) => void
+  onRemoteCharConfirm?: (playerId: number, charIdx: number) => void
+  onAllCharsConfirmed?: (charIdxs: number[]) => void
   onError?: (text: string) => void
 
   constructor(serverUrl: string) {
@@ -81,6 +83,14 @@ export class NetworkManager {
         })
         break
 
+      case 'remoteCharConfirm':
+        this.onRemoteCharConfirm?.(msg.playerId as number, msg.charIdx as number)
+        break
+
+      case 'allCharsConfirmed':
+        this.onAllCharsConfirmed?.(msg.charIdxs as number[])
+        break
+
       case 'error':
         this.onError?.(msg.text as string)
         break
@@ -90,6 +100,7 @@ export class NetworkManager {
   createRoom() { this.send({ type: 'createRoom' }) }
   joinRoom(code: string) { this.send({ type: 'joinRoom', code }) }
   startGame() { this.send({ type: 'startGame' }) }
+  sendCharConfirm(charIdx: number) { this.send({ type: 'charConfirm', charIdx }) }
 
   sendInput(input: RemoteInput) {
     this.send({ type: 'input', ...input })
