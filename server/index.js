@@ -71,7 +71,7 @@ wss.on('connection', (ws) => {
         if (room.started) break
         room.started = true
         const playerCount = room.players.length
-        broadcast(room, { type: 'gameStart', playerCount })
+        broadcast(room, { type: 'gameStart', playerCount }, ws)
         send(ws, { type: 'gameStart', playerCount })
         break
       }

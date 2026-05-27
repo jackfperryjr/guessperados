@@ -129,6 +129,7 @@ const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkSta
   { key: 'sheet-enemy-skeleton', file: 'skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
   { key: 'sheet-enemy-mom',      file: 'mom.png',      fw: 64, fh: 64, walkStart: 4,  walkEnd: 15 },
   { key: 'sheet-dragon',         file: 'dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-dad',            file: 'dad.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,9 @@ export class BootScene extends Phaser.Scene {
     }
     for (const { key, file, fw, fh } of ENEMY_SHEETS) {
       this.load.spritesheet(key, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
+    }
+    for (const c of ['callum', 'carter', 'conrad', 'coco', 'abby', 'eric', 'scarlet']) {
+      this.load.image(`head-${c}`, `assets/${c}_head.png`)
     }
     this.load.image('fire_ability_icon',      'assets/fire_ability_icon.png')
     this.load.image('lightning_ability_icon', 'assets/lightning_ability_icon.png')
@@ -159,6 +163,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset', 'tileset/one/spritesheet.png')
     this.load.tilemapTiledJSON('boss-map', 'tileset/boss/map.json')
     this.load.image('boss-tileset', 'tileset/boss/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-two', 'tileset/two/map.json')
+    this.load.image('tileset-two', 'tileset/two/spritesheet.png')
   }
 
   create() {

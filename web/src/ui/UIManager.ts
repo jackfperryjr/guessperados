@@ -26,6 +26,7 @@ export class UIManager {
   private abilityBoxXs: number[] = []
   private rowYs: number[] = []
   private bossBarFill: Phaser.GameObjects.Rectangle | null = null
+  private noAbilityMarks: Phaser.GameObjects.Text[] = []
 
   constructor(
     scene: Phaser.Scene,
@@ -53,15 +54,35 @@ export class UIManager {
     }
 
     // All players stack vertically on the left
-    const ROW_H = 42
-    const ABX   = 172   // ability box x (after 5 hearts)
+    const ROW_H    = 42
+    const HEAD_SZ  = 28   // display size of the head portrait
+    const HEAD_CX  = 19   // center-x of head portrait
+    const SHIFT    = 40   // how far hearts/ability shift right to make room
+    const ABX      = 172 + SHIFT   // ability box x
+    const FALLBACK_COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
+
+    const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
+
     for (let i = 0; i < playerCount; i++) {
       const rowY = 22 + i * ROW_H
       this.rowYs.push(rowY)
 
+      // Character head portrait (no frame)
+      const charKey   = selectedChars?.[i]
+      const headKey   = charKey ? `head-${charKey}` : ''
+      const hasHead   = headKey !== '' && scene.textures.exists(headKey)
+      if (hasHead) {
+        scene.add.image(HEAD_CX, rowY, headKey)
+          .setDisplaySize(HEAD_SZ, HEAD_SZ)
+          .setScrollFactor(0).setDepth(21)
+      } else {
+        scene.add.rectangle(HEAD_CX, rowY, HEAD_SZ, HEAD_SZ, FALLBACK_COLORS[i] ?? 0x888888, 0.6)
+          .setScrollFactor(0).setDepth(21)
+      }
+
       const hearts: Phaser.GameObjects.Image[] = []
       for (let h = 0; h < 5; h++) {
-        const icon = scene.add.image(16 + h * 22 + 8, rowY, 'item-heart')
+        const icon = scene.add.image(16 + SHIFT + h * 22 + 8, rowY, 'item-heart')
           .setScale(0.48).setScrollFactor(0).setDepth(20)
         hearts.push(icon)
       }
@@ -75,9 +96,13 @@ export class UIManager {
         .setScale(0.1)
         .setVisible(false)
         .setScrollFactor(0).setDepth(21)
+      const noAbilityMark = scene.add.text(ABX, rowY, '✦', {
+        fontSize: '13px', fontFamily: FONT, color: '#444455',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(21)
 
       this.abilityBoxes.push(box)
       this.abilityIcons.push(abilityIcon)
+      this.noAbilityMarks.push(noAbilityMark)
       this.ammoPips.push([])
     }
   }
@@ -114,10 +139,16 @@ export class UIManager {
       const ability = p.currentAbility
       this.abilityBoxes[i]?.setFillStyle(ABILITY_COLORS[ability])
       const icon = this.abilityIcons[i]
+      const noMark = this.noAbilityMarks[i]
       if (icon) {
         const key = ABILITY_ICON_KEYS[ability]
-        if (key) { icon.setTexture(key).setScale(0.1).setVisible(true) }
-        else { icon.setVisible(false) }
+        if (key) {
+          icon.setTexture(key).setScale(0.1).setVisible(true)
+          noMark?.setVisible(false)
+        } else {
+          icon.setVisible(false)
+          noMark?.setVisible(true)
+        }
       }
     })
   }

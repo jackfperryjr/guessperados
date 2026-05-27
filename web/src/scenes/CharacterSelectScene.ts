@@ -179,7 +179,7 @@ export class CharacterSelectScene extends Phaser.Scene {
         const activePads = this.input.gamepad!.gamepads.filter(Boolean)
         const padIdx = activePads.indexOf(pad)
         if (padIdx < 0) return
-        const p = Math.min(padIdx, this.playerCount - 1)
+        const p = this.isMultiplayer ? this.localPlayerId : Math.min(padIdx, this.playerCount - 1)
         if (button.index === 13) { this.focusBack(true);  return }
         if (button.index === 12) { if (this.backFocused) this.focusBack(false); return }
         if (button.index === 14) { if (!this.backFocused) this.move(p, -1) }

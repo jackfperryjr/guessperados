@@ -24,6 +24,8 @@ export class Boss extends Enemy {
     y: number,
     hp: number,
     _attackInterval = 3000,
+    textureKey = 'sheet-dragon',
+    flying = true,
   ) {
     super(scene, x, y, AbilityType.None)
     this.hp = hp
@@ -33,14 +35,17 @@ export class Boss extends Enemy {
 
     const body = this.body as Phaser.Physics.Arcade.Body
 
-    if (scene.textures.exists('sheet-dragon')) {
-      this.setTexture('sheet-dragon', 0)
+    if (scene.textures.exists(textureKey)) {
+      this.setTexture(textureKey, 0)
       this.setScale(3.45)
-      body.setAllowGravity(false)
+      if (flying) {
+        body.setAllowGravity(false)
+        this.bossFlying = true
+      }
       body.setSize(110, 80)
-      body.setOffset((this.displayWidth - 110) / 2, 20)
-      this.bossFlying = true
-      if (scene.anims.exists('sheet-dragon-walk')) this.play('sheet-dragon-walk')
+      body.setOffset((this.displayWidth - 110) / 2, flying ? 20 : this.displayHeight - 80 - 10)
+      const walkAnim = `${textureKey}-walk`
+      if (scene.anims.exists(walkAnim)) this.play(walkAnim)
     } else {
       this.setScale(1.3)
       body.setSize(46, 50)
