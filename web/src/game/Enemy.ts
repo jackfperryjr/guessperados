@@ -7,14 +7,14 @@ const WALK_SPEED = 80
 const ATTACK_INTERVAL: Record<AbilityType, number> = {
   [AbilityType.None]:     0,       // pinklady boss — handled separately
   [AbilityType.Fire]:     2800,
-  [AbilityType.Electric]: 3400,
+  [AbilityType.Lightning]: 3400,
   [AbilityType.Ice]:      3000,
 }
 
 const ENEMY_SHEET: Record<AbilityType, string> = {
   [AbilityType.None]:     'sheet-enemy-mom',
   [AbilityType.Fire]:     'sheet-enemy-zombie',
-  [AbilityType.Electric]: 'sheet-enemy-skeleton',
+  [AbilityType.Lightning]: 'sheet-enemy-skeleton',
   [AbilityType.Ice]:      'sheet-enemy-duck',
 }
 
@@ -22,7 +22,7 @@ const ENEMY_SHEET: Record<AbilityType, string> = {
 const ENEMY_BODY: Record<AbilityType, [number, number]> = {
   [AbilityType.None]:     [44, 50],   // mom — Boss.ts overrides this
   [AbilityType.Fire]:     [38, 50],   // zombie
-  [AbilityType.Electric]: [38, 50],   // dad
+  [AbilityType.Lightning]: [38, 50],   // dad
   [AbilityType.Ice]:      [40, 34],   // duck (flying, wider than tall)
 }
 

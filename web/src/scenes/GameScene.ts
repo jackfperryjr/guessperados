@@ -28,13 +28,19 @@ const DOOR_H = 130   // pixel height of a left/right door opening
 const DOOR_W = 120   // pixel width of a top/bottom door opening
 
 function getEntryPos(dir: ExitDir, cfg: RoomConfig): { x: number; y: number } {
+  if (cfg.entrySpawns?.[dir]) return cfg.entrySpawns[dir]!
   const W = cfg.worldWidth
   const ep = cfg.exitPositions ?? {}
   switch (dir) {
-    case 'left':   return cfg.isBossRoom
-      ? { x: Math.round(cfg.worldWidth / 2), y: ep.left ?? 640 }
-      : { x: cfg.spawnX ?? 1370, y: ep.left ?? 640 }
-    case 'right':  return { x: W - 70, y: ep.right  ?? 640 }
+    case 'left':   return { x: cfg.spawnX ?? (cfg.isBossRoom ? Math.round(cfg.worldWidth / 2) : 1370), y: ep.left ?? 640 }
+    case 'right':
+      // Continuous world rooms re-enter near the boss portal (the traversal point)
+      if (cfg.bossPortal && cfg.worldMap && !cfg.isBossRoom)
+        return { x: cfg.bossPortal.x + 80, y: cfg.bossPortal.y }
+      // Boss rooms: spawn 500px from the right wall so the right-edge exit isn't immediately triggered
+      if (cfg.isBossRoom)
+        return { x: W - 570, y: ep.right ?? 640 }
+      return { x: W - 70, y: ep.right  ?? 640 }
     case 'top':    return { x: ep.top    ?? W / 2, y: 80  }
     case 'bottom': return { x: ep.bottom ?? W / 2, y: 640 }
   }
@@ -65,7 +71,11 @@ export class GameScene extends Phaser.Scene {
   private roomTransitioning = false
   private bossDefeated = false
   private bossRoomLeftWall: Phaser.GameObjects.TileSprite | null = null
-  private level2ExitPos: { x: number; y: number } | null = null
+  private bossRoomLeftBarrier: Phaser.GameObjects.Rectangle | null = null
+  private level2ExitPos:  { x: number; y: number } | null = null
+  private backExitPos:    { x: number; y: number } | null = null
+  private backPortalPos:  { x: number; y: number } | null = null
+  private backPortalLbl:  Phaser.GameObjects.Text | null = null
   private pauseItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private pauseFocusIdx = 0
   private pauseCursor: Phaser.GameObjects.Text | null = null
@@ -103,7 +113,11 @@ export class GameScene extends Phaser.Scene {
     this.roomTransitioning = false
     this.bossDefeated = false
     this.bossRoomLeftWall = null
+    this.bossRoomLeftBarrier = null
     this.level2ExitPos = null
+    this.backExitPos   = null
+    this.backPortalPos = null
+    this.backPortalLbl = null
     this.pauseItems = []
     this.pauseFocusIdx = 0
     this.pauseCursor = null
@@ -155,11 +169,12 @@ export class GameScene extends Phaser.Scene {
     this.setupGamepadEvents()
     this.setupCamera()
 
+    const _bossAlreadyDefeated = !!(this.cfg.bossDefeatedKey && this.registry.get(this.cfg.bossDefeatedKey))
     this.ui = new UIManager(
       this,
       this.registry.get('playerCount') ?? 1,
       this.cfg.name,
-      this.cfg.isBossRoom ?? false,
+      (this.cfg.isBossRoom ?? false) && !_bossAlreadyDefeated,
       this.cfg.bossHp ?? 0,
     )
 
@@ -174,25 +189,32 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
 
-    SoundManager.startBgMusic()
-    this.events.once('shutdown', () => SoundManager.stopBgMusic())
+    const defeatedKey = this.cfg.bossDefeatedKey
+    const isBossRoomLive = this.cfg.isBossRoom && !(defeatedKey && this.registry.get(defeatedKey))
+    SoundManager.startTrack(this.sound, isBossRoomLive ? 'music-boss' : 'music-gameplay')
   }
 
   // ── background ──────────────────────────────────────────────────────────────
 
   private doorGlow(x: number, y: number, w: number, h: number) {
-    const g = this.add.graphics().setDepth(6)
-    g.fillStyle(0x00e5ff, 0.10)
-    g.fillRect(x, y, w, h)
-    g.lineStyle(3, 0x00e5ff, 0.85)
+    const g = this.add.graphics().setDepth(-1)
+    const color = 0x00e5ff
+    // Gradient radiating from door: bright at opening, fading outward
+    for (let i = 9; i >= 0; i--) {
+      const t   = i / 9              // 1=outermost, 0=at door
+      const exp = t * 48
+      g.fillStyle(color, (1 - t) * 0.26 + 0.02)
+      g.fillRect(x - exp, y - exp, w + exp * 2, h + exp * 2)
+    }
+    g.lineStyle(2, color, 0.90)
     g.strokeRect(x, y, w, h)
-    g.lineStyle(4, 0x00e5ff, 1)
+    g.lineStyle(3, color, 1)
     if (w < h) {
-      g.beginPath(); g.moveTo(x - 6, y);     g.lineTo(x + w + 6, y);     g.strokePath()
-      g.beginPath(); g.moveTo(x - 6, y + h); g.lineTo(x + w + 6, y + h); g.strokePath()
+      g.beginPath(); g.moveTo(x - 5, y);     g.lineTo(x + w + 5, y);     g.strokePath()
+      g.beginPath(); g.moveTo(x - 5, y + h); g.lineTo(x + w + 5, y + h); g.strokePath()
     } else {
-      g.beginPath(); g.moveTo(x,     y - 6); g.lineTo(x,     y + h + 6); g.strokePath()
-      g.beginPath(); g.moveTo(x + w, y - 6); g.lineTo(x + w, y + h + 6); g.strokePath()
+      g.beginPath(); g.moveTo(x,     y - 5); g.lineTo(x,     y + h + 5); g.strokePath()
+      g.beginPath(); g.moveTo(x + w, y - 5); g.lineTo(x + w, y + h + 5); g.strokePath()
     }
     this.tweens.add({ targets: g, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
   }
@@ -604,7 +626,7 @@ export class GameScene extends Phaser.Scene {
       if (isInsideWall(item.x, item.y)) continue
       const abilityTex: Partial<Record<AbilityType, string>> = {
         [AbilityType.Fire]:     'fire_ability',
-        [AbilityType.Electric]: 'lightning_ability',
+        [AbilityType.Lightning]: 'lightning_ability',
         [AbilityType.Ice]:      'ice_ability',
       }
       const tex = item.type === 'heart'   ? 'item-heart'
@@ -613,17 +635,19 @@ export class GameScene extends Phaser.Scene {
                 : item.type === 'ability' ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
                 : 'item-orb'
       const ABILITY_RING: Partial<Record<AbilityType, number>> = {
-        [AbilityType.Fire]: 0xff6600, [AbilityType.Electric]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
+        [AbilityType.Fire]: 0xff6600, [AbilityType.Lightning]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
       }
       const ringColor = item.type === 'ability'
         ? (ABILITY_RING[item.ability ?? AbilityType.None] ?? 0xffffff)
         : 0xffffff
-      const ring = item.type !== 'heart'
+      const isHidden = item.type === 'speed' || item.type === 'attack-boost'
+      const ring = (!isHidden && item.type !== 'heart')
         ? this.add.circle(item.x, item.y, 20, 0x000000, 0).setStrokeStyle(2, ringColor).setDepth(7)
         : null
 
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
         .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : 1.2)
+      if (item.type === 'speed' || item.type === 'attack-boost') img.setAlpha(0)
       img.setData('item', item)
       img.setData('ring', ring)
 
@@ -656,6 +680,14 @@ export class GameScene extends Phaser.Scene {
     } else if (item.type === 'mystery') {
       this.triggerMysteryEffect(player)
       SoundManager.collectMystery()
+    } else if (item.type === 'speed') {
+      player.applySpeedBoost(true)
+      this.showPopup(item.x, item.y, 'SPEED UP!', '#ffe066')
+      SoundManager.collectAbility()
+    } else if (item.type === 'attack-boost') {
+      player.applyStrengthBoost(true)
+      this.showPopup(item.x, item.y, 'POWER UP!', '#ff4444')
+      SoundManager.collectAbility()
     }
     this.addScore(500)
   }
@@ -668,7 +700,7 @@ export class GameScene extends Phaser.Scene {
         player.hearts = Math.min(5, player.hearts + 1)
         this.showPopup(player.x, player.y - 32, '+ HEART!', '#ff4d6a')
       } else if (r === 1) {
-        const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
+        const abilities = [AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
         const ability = abilities[Math.floor(Math.random() * abilities.length)]
         player.currentAbility = ability
         player.abilityAmmo = ABILITY_AMMO[ability]
@@ -694,7 +726,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnMysteryEnemies(near: Player, count: number) {
-    const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
+    const abilities = [AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
     for (let i = 0; i < count; i++) {
       const ability = abilities[Math.floor(Math.random() * abilities.length)]
       const ex = near.x + (i === 0 ? -120 : 120)
@@ -795,52 +827,74 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
         const bossY = this.cfg.bossSpawnY ?? 620
-        this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
-        const W = this.cfg.worldWidth
-        this.boss.on('bossDead', () => {
+        const W     = this.cfg.worldWidth
+        const bossAlreadyDefeated: boolean = !!(this.cfg.bossDefeatedKey && this.registry.get(this.cfg.bossDefeatedKey))
+        if (bossAlreadyDefeated) {
+          // Boss already beaten — passthrough: exits open, no respawn
           this.bossDefeated = true
-          SoundManager.bossDeath()
-          this.cameras.main.shake(300, 0.010)
-          this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
-          this.addScore(2000)
+          const runRooms0: RoomConfig[] = this.registry.get('runRooms') ?? []
+          const runIndex0: number       = this.registry.get('runIndex') ?? 0
+          if (runIndex0 + 1 < runRooms0.length) this.openLevel2Exit(W)
+        } else {
+          // Seal the left exit until the boss dies
+          const barrierH = this.cfg.worldHeight ?? 720
+          const barrier = this.add.rectangle(150, barrierH / 2, 20, barrierH, 0x000000, 0)
+          this.physics.add.existing(barrier, true)
+          this.platforms.add(barrier as unknown as Phaser.Physics.Arcade.Image)
+          this.bossRoomLeftBarrier = barrier
 
-          const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
-          const runIndex: number       = this.registry.get('runIndex') ?? 0
-          if (runIndex + 1 < runRooms.length) {
-            // More levels — reveal right exit after brief celebration
-            this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
-          } else {
-            // Final boss — auto-victory
-            this.time.delayedCall(3200, () => {
-              if (!this.roomTransitioning) {
-                this.roomTransitioning = true
-                this.cameras.main.fadeOut(900, 0, 0, 0)
-                this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
-              }
-            })
-          }
-        })
+          this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
+          this.boss.on('bossDead', () => {
+            this.bossDefeated = true
+            if (this.cfg.bossDefeatedKey) this.registry.set(this.cfg.bossDefeatedKey, true)
+            if (this.bossRoomLeftBarrier) {
+              ;(this.bossRoomLeftBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
+              this.bossRoomLeftBarrier = null
+            }
+            SoundManager.bossDeath()
+            SoundManager.startTrack(this.sound, 'music-gameplay')
+            this.cameras.main.shake(300, 0.010)
+            this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
+            this.addScore(2000)
+            this.ui.hideBossBar()
+
+            const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
+            const runIndex: number       = this.registry.get('runIndex') ?? 0
+            if (runIndex + 1 < runRooms.length) {
+              // More levels — reveal right exit after brief celebration
+              this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
+            } else {
+              // Final boss — auto-victory
+              this.time.delayedCall(3200, () => {
+                if (!this.roomTransitioning) {
+                  this.roomTransitioning = true
+                  this.cameras.main.fadeOut(900, 0, 0, 0)
+                  this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
+                }
+              })
+            }
+          })
+        }
       }
 
       if (this.cfg.bossPortal) {
         const { x, y } = this.cfg.bossPortal
         const cy = y - 106  // door center
 
-        // Warm amber glow halo (behind everything)
-        const halo = this.add.graphics().setDepth(1)
-        halo.fillStyle(0xff8800, 0.10)
-        halo.fillRoundedRect(x - 96, cy - 150, 192, 298, { tl: 96, tr: 96, bl: 0, br: 0 })
-        this.tweens.add({ targets: halo, alpha: 0.38, duration: 1300, yoyo: true, repeat: -1 })
-
-        // Outer pulsing glow border around the arch frame
-        const glowBorder = this.add.graphics().setDepth(12)
-        glowBorder.lineStyle(8, 0xff6600, 0.6)
-        glowBorder.strokeRoundedRect(x - 90, cy - 144, 180, 290, { tl: 90, tr: 90, bl: 0, br: 0 })
-        const glowBorder2 = this.add.graphics().setDepth(11)
-        glowBorder2.lineStyle(18, 0xff4400, 0.18)
-        glowBorder2.strokeRoundedRect(x - 94, cy - 148, 188, 298, { tl: 94, tr: 94, bl: 0, br: 0 })
-        this.tweens.add({ targets: glowBorder,  alpha: { from: 0.35, to: 1.0 }, duration: 1000, yoyo: true, repeat: -1 })
-        this.tweens.add({ targets: glowBorder2, alpha: { from: 0.15, to: 0.60 }, duration: 1400, yoyo: true, repeat: -1 })
+        // Gradient glow radiating from arch (top/sides only, clipped at arch base)
+        const archBottom = cy + 140
+        const archGlow = this.add.graphics().setDepth(-1)
+        for (let gi = 11; gi >= 0; gi--) {
+          const t   = gi / 11                      // 1=outermost(dark), 0=at arch(bright)
+          const exp = t * 90
+          archGlow.fillStyle(0xff1100, (1 - t) * 0.35 + 0.02)
+          archGlow.fillRoundedRect(
+            x - 84 - exp, cy - 138 - exp,
+            168 + 2 * exp, (archBottom - (cy - 138)) + exp,
+            { tl: 72 + exp, tr: 72 + exp, bl: 0, br: 0 },
+          )
+        }
+        this.tweens.add({ targets: archGlow, alpha: { from: 0.55, to: 1.0 }, duration: 1200, yoyo: true, repeat: -1 })
 
         // Stone arch frame: outer (depth 2), then inner recess overlaid on same graphic
         const arch = this.add.graphics().setDepth(2)
@@ -848,12 +902,6 @@ export class GameScene extends Phaser.Scene {
         arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
         arch.fillStyle(0x150903, 1)
         arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
-
-        // Stone side pillar accents
-        this.add.rectangle(x - 86, cy + 4,  14, 210, 0x1e1208, 0.88).setDepth(2)
-        this.add.rectangle(x + 86, cy + 4,  14, 210, 0x1e1208, 0.88).setDepth(2)
-        this.add.rectangle(x - 86, cy - 100, 14, 18, 0x2a1a0e, 0.90).setDepth(2)
-        this.add.rectangle(x + 86, cy - 100, 14, 18, 0x2a1a0e, 0.90).setDepth(2)
 
         // Keystone at arch crown
         this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
@@ -909,12 +957,77 @@ export class GameScene extends Phaser.Scene {
           fontSize: '9px', fontFamily: FONT, color: '#000000',
         }).setOrigin(0.5).setDepth(11).setVisible(false)
         this.bossPortalPos = this.cfg.bossPortal
+        const runRooms0: RoomConfig[] = this.registry.get('runRooms') ?? []
+        const runIndex0: number       = this.registry.get('runIndex') ?? 0
+        const nextBossKey = runRooms0[runIndex0 + 1]?.bossDefeatedKey
+        if (nextBossKey && this.registry.get(nextBossKey)) this.portalLabel?.setText('↑ CONTINUE →')
       }
 
-      // Star-burst orb — top-right corner of boss room (single use)
+      // Non-glowing back portal — only visible when boss already defeated (CONTINUE mode)
+      if (this.cfg.backPortal) {
+        const alreadyDefeated = !!(this.cfg.bossDefeatedKey && this.registry.get(this.cfg.bossDefeatedKey))
+        if (alreadyDefeated) {
+          const { x, y } = this.cfg.backPortal
+          const cy = y - 106
+
+          // Stone arch frame (no glow)
+          const arch = this.add.graphics().setDepth(2)
+          arch.fillStyle(0x2a1a0e, 1)
+          arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
+          arch.fillStyle(0x150903, 1)
+          arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
+          this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
+          this.add.rectangle(x, cy - 132, 12, 12, 0x5a3c1e, 0.75).setDepth(2)
+
+          // Wood door panels
+          const panelTop = cy - 68
+          const panelBot = cy + 134
+          const panelH   = panelBot - panelTop
+          const wp = this.add.graphics().setDepth(2)
+          wp.fillStyle(0x6b3e1c, 1)
+          wp.fillRect(x - 72, panelTop, 70, panelH)
+          wp.fillStyle(0x6b3e1c, 1)
+          wp.fillRect(x + 2, panelTop, 70, panelH)
+          for (let row = 4; row < panelH; row += 10) {
+            const prominent = row % 30 === 0
+            wp.fillStyle(prominent ? 0x3d2010 : 0x4e2c14, prominent ? 0.55 : 0.25)
+            wp.fillRect(x - 72, panelTop + row, 70, prominent ? 3 : 2)
+            wp.fillRect(x + 2,  panelTop + row, 70, prominent ? 3 : 2)
+          }
+          wp.fillStyle(0x8a5530, 0.30)
+          wp.fillRect(x - 72, panelTop, 4, panelH)
+          wp.fillRect(x + 68, panelTop, 4, panelH)
+          this.add.rectangle(x, panelTop + panelH / 2, 4, panelH, 0x120804).setDepth(2)
+
+          // Iron banding
+          const bandYs = [cy - 30, cy + 40, cy + 100]
+          bandYs.forEach(by => {
+            this.add.rectangle(x, by,     140, 7, 0x252525).setDepth(2)
+            this.add.rectangle(x, by - 1, 140, 3, 0x3c3c3c, 0.50).setDepth(2)
+            ;[x - 56, x - 28, x + 2, x + 30, x + 58].forEach(rx => {
+              this.add.circle(rx, by, 3, 0x2e2e2e).setDepth(2)
+              this.add.circle(rx, by, 1, 0x4c4c4c).setDepth(2)
+            })
+          })
+
+          // Ring knockers
+          ;[-30, 30].forEach(ox => {
+            this.add.circle(x + ox, cy + 38, 8, 0x8a6830).setDepth(2)
+            this.add.circle(x + ox, cy + 38, 5, 0x241508).setDepth(2)
+            this.add.circle(x + ox, cy + 46, 4, 0x8a6830).setDepth(2)
+          })
+
+          this.backPortalLbl = this.add.text(x, cy - 158, '↑ RETURN', {
+            fontSize: '9px', fontFamily: FONT, color: '#000000',
+          }).setOrigin(0.5).setDepth(11).setVisible(false)
+          this.backPortalPos = this.cfg.backPortal
+        }
+      }
+
+      // Star-burst orb — boss room instant-kill collectible
       if (this.cfg.isBossRoom) {
-        const orbX = this.cfg.starOrbSide === 'left' ? 120 : this.cfg.worldWidth - 120
-        const orbY = 220
+        const orbX = this.cfg.starOrb ? this.cfg.starOrb.x : (this.cfg.starOrbSide === 'left' ? 120 : this.cfg.worldWidth - 120)
+        const orbY = this.cfg.starOrb ? this.cfg.starOrb.y : 220
         const orbRing = this.add.circle(orbX, orbY, 22, 0x000000, 0)
           .setStrokeStyle(2, 0xffd700).setAlpha(0.45).setDepth(7)
         const orbImg  = this.add.star(orbX, orbY, 6, 8, 20, 0xffd700)
@@ -974,6 +1087,12 @@ export class GameScene extends Phaser.Scene {
         const zone = this.add.zone(p.x, p.y, p.w, p.h)
         this.physics.add.existing(zone, true)
         this.platforms.add(zone as unknown as Phaser.Physics.Arcade.Image)
+      }
+
+      // Back exit — left world boundary in non-boss worldMap rooms past the first
+      const backRunIndex: number = this.registry.get('runIndex') ?? 0
+      if (!this.cfg.isBossRoom && backRunIndex > 0) {
+        this.backExitPos = { x: 0, y: 0 }  // flag only; trigger uses p.x <= 100
       }
 
       return
@@ -1089,9 +1208,11 @@ export class GameScene extends Phaser.Scene {
       this.boss.on('bossDead', () => {
         this.bossDefeated = true
         SoundManager.bossDeath()
+        SoundManager.startTrack(this.sound, 'music-gameplay')
         this.cameras.main.shake(300, 0.010)
         this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
         this.addScore(2000)
+        this.ui.hideBossBar()
         // Auto-transition to victory screen after celebration
         this.time.delayedCall(3200, () => {
           if (!this.roomTransitioning) {
@@ -1139,7 +1260,7 @@ export class GameScene extends Phaser.Scene {
     const BLOCK    = 32
     const abilityPool = [
       AbilityType.None, AbilityType.None, AbilityType.None, AbilityType.None,
-      AbilityType.Fire, AbilityType.Electric, AbilityType.Ice,
+      AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice,
     ]
 
     const addBlock = (x: number, y: number, ability: AbilityType) => {
@@ -1258,7 +1379,7 @@ export class GameScene extends Phaser.Scene {
     } else { // chest
       fw = 48; fh = 40
       const cl = ability === AbilityType.Fire     ? 0xff6600
-               : ability === AbilityType.Electric ? 0xffdd00
+               : ability === AbilityType.Lightning ? 0xffdd00
                : ability === AbilityType.Ice      ? 0x66ccff : 0xcb9b00
       v(this.add.rectangle(x,       y + 8,  48, 28, 0x5c3317, 0.98).setDepth(3))
       v(this.add.rectangle(x,       y + 6,  42,  2, 0x3d1f0a, 0.35).setDepth(4))
@@ -1317,7 +1438,7 @@ export class GameScene extends Phaser.Scene {
     const roll = Math.random()
     const ability = roll < 0.4 ? AbilityType.None
                   : roll < 0.6 ? AbilityType.Fire
-                  : roll < 0.8 ? AbilityType.Electric
+                  : roll < 0.8 ? AbilityType.Lightning
                   : AbilityType.Ice
 
     if (ability === AbilityType.None) {
@@ -1327,11 +1448,11 @@ export class GameScene extends Phaser.Scene {
 
     const texMap: Partial<Record<AbilityType, string>> = {
       [AbilityType.Fire]:     'fire_ability',
-      [AbilityType.Electric]: 'lightning_ability',
+      [AbilityType.Lightning]: 'lightning_ability',
       [AbilityType.Ice]:      'ice_ability',
     }
     const ringColorMap: Partial<Record<AbilityType, number>> = {
-      [AbilityType.Fire]: 0xff6600, [AbilityType.Electric]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
+      [AbilityType.Fire]: 0xff6600, [AbilityType.Lightning]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
     }
     const dropY = y - 16
     const item: ItemSpawn = { type: 'ability', ability, x, y: dropY }
@@ -1355,7 +1476,7 @@ export class GameScene extends Phaser.Scene {
   private spawnRoomFurnitureRandom() {
     const W = this.cfg.worldWidth
     const FLOOR_Y = 672
-    const pool = [AbilityType.None, AbilityType.None, AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
+    const pool = [AbilityType.None, AbilityType.None, AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
 
     const numBookcases = Math.max(1, Math.floor(W / 600))
     for (let i = 0; i < numBookcases; i++) {
@@ -1443,6 +1564,16 @@ export class GameScene extends Phaser.Scene {
         if (typeof persistedHearts[i] === 'number') {
           p.hearts = persistedHearts[i]
         }
+      })
+    }
+
+    const persistedBoosts: { speedBoostActive: boolean; strengthBoostActive: boolean }[] | null =
+      this.registry.get('persistedBoosts')
+    if (persistedBoosts) {
+      this.players.forEach((p, i) => {
+        const pb = persistedBoosts[i]
+        if (pb?.speedBoostActive)    p.applySpeedBoost(true)
+        if (pb?.strengthBoostActive) p.applyStrengthBoost(true)
       })
     }
   }
@@ -1626,17 +1757,16 @@ export class GameScene extends Phaser.Scene {
       if (!e.active) return
       const dx = e.x - src.x, dy = Math.abs(e.y - src.y)
       if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
-        e.hit()
-        this.addScore(SCORE_ENEMY)
+        this.hitEnemy(e, src)
         const eb = e.body as Phaser.Physics.Arcade.Body
-        eb.setVelocityX(dir * 350)
-        eb.setVelocityY(-180)
+        eb.setVelocityX(dir * 620)
+        eb.setVelocityY(-300)
       }
     })
     if (this.boss?.active) {
       const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
       if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
-        this.boss.hit()
+        this.hitBoss(src)
         const bb = this.boss.body as Phaser.Physics.Arcade.Body
         bb.setVelocityX(dir * 220)
       }
@@ -1648,10 +1778,26 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private hitEnemy(e: Enemy, src: Player) {
+    if (src.strengthBoostActive) e.die()
+    else e.hit()
+    this.addScore(SCORE_ENEMY)
+  }
+
+  private hitBoss(src: Player) {
+    if (!this.boss?.active) return
+    if (src.strengthBoostActive) {
+      this.boss.emit('hpChanged', 0, this.boss.maxHp)
+      this.boss.bossDie()
+    } else {
+      this.boss.hit()
+    }
+  }
+
   private fireAbility(ability: AbilityType, src: Player) {
     switch (ability) {
       case AbilityType.Fire:     this.spawnFireball(src);   break
-      case AbilityType.Electric: this.electricBurst(src);   break
+      case AbilityType.Lightning: this.lightningBurst(src);   break
       case AbilityType.Ice:      this.iceBlast(src);        break
     }
   }
@@ -1666,19 +1812,19 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: fb, angle: fb.angle + 360, duration: 450, repeat: -1 })
 
     this.enemies.forEach(e => {
-      this.physics.add.overlap(fb, e, () => { e.hit(); this.addScore(SCORE_ENEMY); fb.destroy() })
+      this.physics.add.overlap(fb, e, () => { this.hitEnemy(e, src); fb.destroy() })
     })
     this.destructibles.forEach(d => {
       this.physics.add.overlap(fb, d, () => { d.takeDamage(50, DamageType.Fire); fb.destroy() })
     })
     if (this.boss?.active) {
-      this.physics.add.overlap(fb, this.boss, () => { this.boss!.hit(); fb.destroy() })
+      this.physics.add.overlap(fb, this.boss, () => { this.hitBoss(src); fb.destroy() })
     }
     this.time.delayedCall(2200, () => { if (fb.active) fb.destroy() })
   }
 
 
-  private electricBurst(src: Player) {
+  private lightningBurst(src: Player) {
     const dir = src.flipX ? -1 : 1
     const boltLen = 900
     const boltCx  = src.x + dir * boltLen / 2
@@ -1698,14 +1844,18 @@ export class GameScene extends Phaser.Scene {
     })
     if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
       SoundManager.bossHit()
-      this.boss.hit()
-      // Two follow-up hits spaced past the boss's invincibility window
-      this.time.delayedCall(700,  () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
-      this.time.delayedCall(1400, () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
+      if (src.strengthBoostActive) {
+        this.hitBoss(src)
+      } else {
+        this.boss.hit()
+        // Two follow-up hits spaced past the boss's invincibility window
+        this.time.delayedCall(700,  () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
+        this.time.delayedCall(1400, () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
+      }
     }
     this.destructibles.forEach(d => {
       if (dir * (d.x - src.x) > 0 && Math.abs(d.y - src.y) < 80) {
-        d.takeDamage(150, DamageType.Electric)   // 3× fire's 50
+        d.takeDamage(150, DamageType.Lightning)   // 3× fire's 50
       }
     })
   }
@@ -1721,13 +1871,13 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: 600, repeat: -1 })
 
     this.enemies.forEach(e => {
-      this.physics.add.overlap(proj, e, () => { e.hit(); this.addScore(SCORE_ENEMY); proj.destroy() })
+      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, src); proj.destroy() })
     })
     this.destructibles.forEach(d => {
       this.physics.add.overlap(proj, d, () => { d.takeDamage(50, DamageType.Physical); proj.destroy() })
     })
     if (this.boss?.active) {
-      this.physics.add.overlap(proj, this.boss, () => { this.boss!.hit(); proj.destroy() })
+      this.physics.add.overlap(proj, this.boss, () => { this.hitBoss(src); proj.destroy() })
     }
     this.time.delayedCall(2200, () => { if (proj.active) proj.destroy() })
   }
@@ -1785,7 +1935,7 @@ export class GameScene extends Phaser.Scene {
         break
       }
 
-      case AbilityType.Electric: {
+      case AbilityType.Lightning: {
         // Diagonal lightning bolt from boss to nearest player
         const dx = target.x - bx, dy = target.y - by
         const boltLen = Math.sqrt(dx * dx + dy * dy)
@@ -1825,7 +1975,7 @@ export class GameScene extends Phaser.Scene {
 
     let gy = -800
     if (enemy.abilityType === AbilityType.Ice)      gy = 0
-    if (enemy.abilityType === AbilityType.Electric) gy = -200
+    if (enemy.abilityType === AbilityType.Lightning) gy = -200
 
     const isIce  = enemy.abilityType === AbilityType.Ice
     const isFire = enemy.abilityType === AbilityType.Fire
@@ -1840,7 +1990,7 @@ export class GameScene extends Phaser.Scene {
 
     if (texKey === 'fireball') {
       if (isIce)  proj.setTint(0x66ccff)
-      if (enemy.abilityType === AbilityType.Electric) proj.setTint(0xffdd00).setScale(1.4)
+      if (enemy.abilityType === AbilityType.Lightning) proj.setTint(0xffdd00).setScale(1.4)
     }
     if (isFire || isIce) {
       proj.setFlipX(dir < 0)
@@ -1927,9 +2077,14 @@ export class GameScene extends Phaser.Scene {
   private gameOver() {
     this.registry.set('persistedAbilities', null)
     this.registry.set('persistedHearts', null)
+    this.registry.set('persistedBoosts', null)
+    this.registry.set('dragonDefeated', null)
+    this.registry.set('dadDefeated', null)
+    this.registry.set('momDefeated', null)
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
+    SoundManager.stopTrack()
     this.cameras.main.fadeOut(800, 80, 0, 0)
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('GameOverScene')
@@ -1939,8 +2094,13 @@ export class GameScene extends Phaser.Scene {
   private exitRoom(dir: ExitDir) {
     if (this.roomTransitioning) return
     if (!this.gm.isPlaying()) return
-    // Boss room: sealed until boss is defeated
-    if (this.cfg.isBossRoom && !this.bossDefeated) return
+
+    const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
+    const runIndex: number = this.registry.get('runIndex') ?? 0
+    const goBack = (((dir === 'left' || dir === 'bottom') && !this.cfg.leftExitForward) || (dir === 'right' && !!this.cfg.rightExitBack)) && runIndex > 0
+
+    // Boss room: sealed going forward until boss is defeated; retreat is always allowed
+    if (this.cfg.isBossRoom && !this.bossDefeated && !goBack) return
 
     this.roomTransitioning = true
     this.gm.pause()
@@ -1950,11 +2110,9 @@ export class GameScene extends Phaser.Scene {
       this.players.map(p => ({ ability: p.currentAbility, ammo: p.abilityAmmo })))
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
+    this.registry.set('persistedBoosts',
+      this.players.map(p => ({ speedBoostActive: p.speedBoostActive, strengthBoostActive: p.strengthBoostActive })))
 
-    const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
-    const runIndex: number = this.registry.get('runIndex') ?? 0
-
-    const goBack = (dir === 'left' || dir === 'bottom') && runIndex > 0
     const nextIndex = goBack ? runIndex - 1 : runIndex + 1
 
     // Past the last room = true win → go to victory screen
@@ -1971,33 +2129,11 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
   }
 
-  private openLevel2Exit(W: number) {
-    const exitY = this.cfg.exitPositions?.right ?? 1280
-    const exitX = W - 40
-
-    // Glowing doorway on right wall
-    const glow = this.add.graphics().setDepth(8)
-    glow.fillStyle(0x00e5ff, 0.18)
-    glow.fillRect(exitX - 50, exitY - DOOR_H / 2, 60, DOOR_H)
-    glow.lineStyle(3, 0x00e5ff, 0.9)
-    glow.strokeRect(exitX - 50, exitY - DOOR_H / 2, 60, DOOR_H)
-    this.tweens.add({ targets: glow, alpha: { from: 0.4, to: 1 }, duration: 800, yoyo: true, repeat: -1 })
-
-    this.add.text(exitX - 20, exitY - 18, '→', {
-      fontSize: '24px', fontFamily: FONT, color: '#00e5ff',
-      stroke: '#003344', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(9)
-
-    this.add.text(exitX - 20, exitY + 20, 'LVL 2', {
-      fontSize: '7px', fontFamily: FONT, color: '#aaeeff',
-      stroke: '#003344', strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(9)
-
-    this.level2ExitPos = { x: exitX, y: exitY }
+  private openLevel2Exit(_W: number) {
+    this.level2ExitPos = { x: 0, y: 0 }  // flag only; trigger uses p.x >= worldWidth - 100
   }
 
   private winGame() {
-    // Throne door → go to boss room (next index in run)
     this.exitRoom('right')
   }
 
@@ -2238,7 +2374,7 @@ export class GameScene extends Phaser.Scene {
       // Exit boundary detection (all modes except continuous worldMap)
       const remoteIds2: number[] = this.registry.get('remotePlayers') ?? []
       const isLocalPlayer = !remoteIds2.includes(p.playerId)
-      const isContinuousWorld = !!this.cfg.worldMap && !this.cfg.worldMap.section
+      const isContinuousWorld = !!this.cfg.worldMap && !this.cfg.worldMap.section && !this.cfg.isBossRoom
       if (isLocalPlayer && !this.roomTransitioning && p.isAlive && !isContinuousWorld) {
         const W = this.cfg.worldWidth
         const exits = this.cfg.exits
@@ -2249,25 +2385,59 @@ export class GameScene extends Phaser.Scene {
         if (p.y > 740 && exits.includes('bottom') && Math.abs(p.x - (ep2.bottom ?? W / 2)) < DOOR_W / 2) { this.exitRoom('bottom'); return }
       }
 
-      // Throne room: press Up near the door (keyboard or gamepad)
+      // One-shot touch interact flag for portal/door entry (consumed here, valid for this player only)
+      const touchInteract = isLocalPlayer ? (this.touchControls?.interactJust ?? false) : false
+
+      // Throne room: press Up near the door (keyboard, gamepad, or touch)
       if (this.cfg.isThrone && isLocalPlayer && p.isAlive) {
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         const nearDoor = Math.abs(p.x - this.throneX) < 70
         this.throneLabel?.setVisible(nearDoor)
-        if (nearDoor && jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)) this.winGame()
+        if (nearDoor && (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))) this.winGame()
       }
 
       if (this.bossPortalPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
         const nearPortal = Phaser.Math.Distance.Between(p.x, p.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
         this.portalLabel?.setVisible(nearPortal)
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
-        if (nearPortal && jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)) this.winGame()
+        if (nearPortal && (touchInteract || (jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)))) this.winGame()
       }
 
-      // Level 2 exit — walk close to the right wall after defeating the dragon
+      // Back portal — non-glowing boss door for returning to previous room (CONTINUE mode)
+      if (this.backPortalPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        const nearBack = Phaser.Math.Distance.Between(p.x, p.y, this.backPortalPos.x, this.backPortalPos.y) < 90
+        this.backPortalLbl?.setVisible(nearBack)
+        const jumpKey2 = this.playerKeysets.get(p.playerId)?.['jump']
+        if (nearBack && (touchInteract || (jumpKey2 && Phaser.Input.Keyboard.JustDown(jumpKey2)))) {
+          const ri: number = this.registry.get('runIndex') ?? 0
+          if (ri > 0) {
+            this.roomTransitioning = true
+            this.gm.pause()
+            this.physics.world.isPaused = true
+            this.registry.set('score', this.score)
+            this.registry.set('persistedAbilities', this.players.map(pl => ({ ability: pl.currentAbility, ammo: pl.abilityAmmo })))
+            this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
+            this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive })))
+            this.registry.set('runIndex', ri - 1)
+            this.registry.set('entryDir', 'right')
+            this.cameras.main.fadeOut(400, 0, 0, 0)
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+          }
+        }
+      }
+
+      // Level 2 exit — walk into the right world boundary after defeating the dragon
       if (this.level2ExitPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
-        if (Phaser.Math.Distance.Between(p.x, p.y, this.level2ExitPos.x, this.level2ExitPos.y) < 80) {
+        if (p.x >= this.cfg.worldWidth - 100) {
           this.exitRoom('right')
+          return
+        }
+      }
+
+      // Back exit — walk into the left world boundary
+      if (this.backExitPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        if (p.x <= 100) {
+          this.exitRoom('left')
           return
         }
       }

@@ -12,7 +12,7 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'ability' | 'mystery'
+export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
@@ -43,8 +43,14 @@ export interface RoomConfig {
   bossSpawnX?: number
   bossSpawnY?: number
   bossPortal?: { x: number; y: number }
+  bossDefeatedKey?: string   // registry key set to true when this boss room's boss dies
+  leftExitForward?: boolean   // left exit advances runIndex instead of going back
+  rightExitBack?: boolean     // right exit goes back (decrements runIndex) instead of forward
+  backPortal?: { x: number; y: number }  // non-glowing boss door for returning to previous room
+  entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
   spawnX?: number            // override default left-entry X for continuous world rooms
   starOrbSide?: 'left' | 'right'  // which corner the star-burst orb appears in
+  starOrb?: { x: number; y: number }  // explicit star-burst orb position (overrides starOrbSide)
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
@@ -59,9 +65,12 @@ export interface RoomConfig {
 
 const HALL    = { tileset: 'tile-castle', bgFar: 'bg-great-hall', bgMid: 'bg-hall-glow'    }
 const SANCTUM = { tileset: 'tile-castle', bgFar: 'bg-sanctum',     bgMid: 'bg-sanctum-glow' }
-const MAP      = { key: 'world-map',     tileKey: 'tileset',      tilesetName: 'spritefusion' } as const
-const BOSS_MAP = { key: 'boss-map',      tileKey: 'boss-tileset', tilesetName: 'spritefusion' } as const
-const MAP_TWO  = { key: 'world-map-two', tileKey: 'tileset-two',  tilesetName: 'spritefusion' } as const
+const MAP       = { key: 'world-map',      tileKey: 'tileset',           tilesetName: 'spritefusion' } as const
+const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tilesetName: 'spritefusion' } as const
+const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
+const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
+const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
+const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
 // Map: tileset/one/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
@@ -86,14 +95,14 @@ const WORLD_ROOM: RoomConfig = {
     { x: 3900, y: 620, ability: AbilityType.Fire     },
     { x: 4400, y: 620, ability: AbilityType.Fire     },
     { x: 4800, y: 620, ability: AbilityType.Fire     },
-    // Skeletons (Electric) — ground patrol
-    { x: 1900, y: 620, ability: AbilityType.Electric },
-    { x: 2300, y: 620, ability: AbilityType.Electric },
-    { x: 2700, y: 620, ability: AbilityType.Electric },
-    { x: 3200, y: 620, ability: AbilityType.Electric },
-    { x: 3700, y: 620, ability: AbilityType.Electric },
-    { x: 4200, y: 620, ability: AbilityType.Electric },
-    { x: 4600, y: 620, ability: AbilityType.Electric },
+    // Skeletons (Lightning) — ground patrol
+    { x: 1900, y: 620, ability: AbilityType.Lightning },
+    { x: 2300, y: 620, ability: AbilityType.Lightning },
+    { x: 2700, y: 620, ability: AbilityType.Lightning },
+    { x: 3200, y: 620, ability: AbilityType.Lightning },
+    { x: 3700, y: 620, ability: AbilityType.Lightning },
+    { x: 4200, y: 620, ability: AbilityType.Lightning },
+    { x: 4600, y: 620, ability: AbilityType.Lightning },
     // Ducks (Ice) — floating
     { x: 1800, y: 420, ability: AbilityType.Ice      },
     { x: 2200, y: 420, ability: AbilityType.Ice      },
@@ -121,11 +130,11 @@ const WORLD_ROOM: RoomConfig = {
     { type: 'bookcase', x: 2960, scanFromY: 580 },
     { type: 'bookcase', x: 3080, scanFromY: 580 },
     { type: 'bookcase', x: 3200, scanFromY: 580 },
-    { type: 'bookcase', x: 3320, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 3320, scanFromY: 580, ability: AbilityType.Lightning },
     { type: 'bookcase', x: 3440, scanFromY: 580 },
     { type: 'bookcase', x: 3560, scanFromY: 580 },
     { type: 'bookcase', x: 3680, scanFromY: 580 },
-    { type: 'bookcase', x: 3800, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 3800, scanFromY: 580, ability: AbilityType.Lightning },
     { type: 'bookcase', x: 3920, scanFromY: 580 },
     { type: 'bookcase', x: 4040, scanFromY: 580 },
     { type: 'bookcase', x: 4160, scanFromY: 580 },
@@ -178,13 +187,13 @@ const WORLD_ROOM: RoomConfig = {
     { type: 'chest', x: 2200, scanFromY: 580, ability: AbilityType.Fire     },
     { type: 'chest', x: 2320, scanFromY: 580 },
     { type: 'chest', x: 2440, scanFromY: 580 },
-    { type: 'chest', x: 2560, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 2560, scanFromY: 580, ability: AbilityType.Lightning },
     { type: 'chest', x: 2680, scanFromY: 580 },
     { type: 'chest', x: 2800, scanFromY: 580 },
-    { type: 'chest', x: 2920, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 2920, scanFromY: 580, ability: AbilityType.Lightning },
     { type: 'chest', x: 3040, scanFromY: 580 },
     { type: 'chest', x: 3160, scanFromY: 580 },
-    { type: 'chest', x: 3280, scanFromY: 580, ability: AbilityType.Electric },
+    { type: 'chest', x: 3280, scanFromY: 580, ability: AbilityType.Lightning },
     { type: 'chest', x: 3400, scanFromY: 580 },
     { type: 'chest', x: 3520, scanFromY: 580 },
     { type: 'chest', x: 3640, scanFromY: 580, ability: AbilityType.Ice      },
@@ -208,9 +217,11 @@ const WORLD_ROOM: RoomConfig = {
     { x: 3300, y: 580 }, { x: 4100, y: 580 },
   ],
   items: [
+    { x: 148,  y: 502, type: 'speed' },        // hidden permanent speed boost
+    { x: 1456, y: 502, type: 'attack-boost' }, // hidden permanent strength boost
     { x: 1800, y: 560, type: 'heart' },
     { x: 2400, y: 560, type: 'ability', ability: AbilityType.Fire     },
-    { x: 3100, y: 560, type: 'ability', ability: AbilityType.Electric },
+    { x: 3100, y: 560, type: 'ability', ability: AbilityType.Lightning },
     { x: 3800, y: 560, type: 'ability', ability: AbilityType.Ice      },
     { x: 4500, y: 560, type: 'heart' },
   ],
@@ -229,6 +240,8 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 1280, right: 1280 },
   isBossRoom: true,
+  bossDefeatedKey: 'dragonDefeated',
+  backPortal: { x: 84, y: 1280 },
   bossHp: 15,
   bossSpawnX: 800,
   bossSpawnY: 900,   // flying boss, starts mid-room
@@ -265,32 +278,32 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   worldHeight: 117 * 32,   // 3744
   worldMap: { ...MAP_TWO },
   exits: [],
-  exitPositions: { left: 3200 },
-  spawnX: 170,              // spawn near left edge of map (bottom-left room)
+  exitPositions: { left: 3584 },
+  spawnX: 314,              // spawn at floor level, clear of the left-edge exit
   bossPortal: { x: 774, y: 736 },
   platforms: [],
   enemies: [
     // Bottom-left area — near player spawn
     { x:  400, y: 3100, ability: AbilityType.Fire     },
-    { x:  600, y: 3100, ability: AbilityType.Electric },
+    { x:  600, y: 3100, ability: AbilityType.Lightning },
     { x:  900, y: 3100, ability: AbilityType.Ice      },
     { x: 1200, y: 3100, ability: AbilityType.Fire     },
-    { x: 1500, y: 3100, ability: AbilityType.Electric },
+    { x: 1500, y: 3100, ability: AbilityType.Lightning },
     // Mid-left vertical corridor enemies
     { x:  350, y: 2400, ability: AbilityType.Ice      },
     { x:  650, y: 2400, ability: AbilityType.Fire     },
-    { x:  400, y: 1800, ability: AbilityType.Electric },
+    { x:  400, y: 1800, ability: AbilityType.Lightning },
     { x:  700, y: 1800, ability: AbilityType.Ice      },
     { x:  500, y: 1200, ability: AbilityType.Fire     },
     // Mid-map ground floor
     { x: 1800, y: 3100, ability: AbilityType.Fire     },
-    { x: 2200, y: 3100, ability: AbilityType.Electric },
+    { x: 2200, y: 3100, ability: AbilityType.Lightning },
     { x: 2600, y: 3100, ability: AbilityType.Ice      },
     { x: 3000, y: 3100, ability: AbilityType.Fire     },
-    { x: 3400, y: 3100, ability: AbilityType.Electric },
+    { x: 3400, y: 3100, ability: AbilityType.Lightning },
     { x: 3800, y: 3100, ability: AbilityType.Ice      },
     { x: 4200, y: 3100, ability: AbilityType.Fire     },
-    { x: 4600, y: 3100, ability: AbilityType.Electric },
+    { x: 4600, y: 3100, ability: AbilityType.Lightning },
     { x: 5000, y: 3100, ability: AbilityType.Ice      },
     // Flying ducks — scattered heights
     { x:  800, y: 2800, ability: AbilityType.Ice      },
@@ -300,9 +313,11 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { x: 3600, y: 2800, ability: AbilityType.Ice      },
     { x: 4400, y: 2600, ability: AbilityType.Ice      },
     // Upper level enemies (near boss portal area)
-    { x:  600, y:  900, ability: AbilityType.Electric },
+    { x:  600, y:  900, ability: AbilityType.Lightning },
     { x:  900, y:  900, ability: AbilityType.Fire     },
-    { x: 1100, y:  900, ability: AbilityType.Electric },
+    { x: 1100, y:  900, ability: AbilityType.Lightning },
+    // Mid-right platform (floor surface at y=1376)
+    { x: 4080, y: 1340, ability: AbilityType.Lightning },
   ],
   destructibles: [],
   furnitureSpawns: [
@@ -311,7 +326,7 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { type: 'bookcase', x:  480, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'bookcase', x:  600, scanFromY: 3050 },
     { type: 'bookcase', x:  720, scanFromY: 3050 },
-    { type: 'bookcase', x:  840, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'bookcase', x:  840, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'bookcase', x:  960, scanFromY: 3050 },
     { type: 'bookcase', x: 1080, scanFromY: 3050 },
     { type: 'bookcase', x: 1200, scanFromY: 3050, ability: AbilityType.Ice      },
@@ -319,7 +334,7 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { type: 'bookcase', x: 1680, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'bookcase', x: 1920, scanFromY: 3050 },
     { type: 'bookcase', x: 2160, scanFromY: 3050 },
-    { type: 'bookcase', x: 2400, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 2400, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'bookcase', x: 2640, scanFromY: 3050 },
     { type: 'bookcase', x: 2880, scanFromY: 3050 },
     { type: 'bookcase', x: 3120, scanFromY: 3050, ability: AbilityType.Ice      },
@@ -327,7 +342,7 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { type: 'bookcase', x: 3600, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'bookcase', x: 3840, scanFromY: 3050 },
     { type: 'bookcase', x: 4080, scanFromY: 3050 },
-    { type: 'bookcase', x: 4320, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'bookcase', x: 4320, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'bookcase', x: 4560, scanFromY: 3050 },
     { type: 'bookcase', x: 4800, scanFromY: 3050, ability: AbilityType.Ice      },
     { type: 'bookcase', x: 5040, scanFromY: 3050 },
@@ -355,19 +370,19 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
     { type: 'table', x: 5200, scanFromY: 3050 },
     { type: 'chest', x:  440, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'chest', x:  680, scanFromY: 3050 },
-    { type: 'chest', x:  920, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'chest', x:  920, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'chest', x: 1160, scanFromY: 3050 },
     { type: 'chest', x: 1400, scanFromY: 3050, ability: AbilityType.Ice      },
     { type: 'chest', x: 1760, scanFromY: 3050 },
     { type: 'chest', x: 2000, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'chest', x: 2240, scanFromY: 3050 },
-    { type: 'chest', x: 2480, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'chest', x: 2480, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'chest', x: 2720, scanFromY: 3050 },
     { type: 'chest', x: 2960, scanFromY: 3050, ability: AbilityType.Ice      },
     { type: 'chest', x: 3200, scanFromY: 3050 },
     { type: 'chest', x: 3440, scanFromY: 3050, ability: AbilityType.Fire     },
     { type: 'chest', x: 3680, scanFromY: 3050 },
-    { type: 'chest', x: 3920, scanFromY: 3050, ability: AbilityType.Electric },
+    { type: 'chest', x: 3920, scanFromY: 3050, ability: AbilityType.Lightning },
     { type: 'chest', x: 4160, scanFromY: 3050 },
     { type: 'chest', x: 4400, scanFromY: 3050, ability: AbilityType.Ice      },
     { type: 'chest', x: 4640, scanFromY: 3050 },
@@ -383,55 +398,103 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   items: [
     { x:  500, y: 3060, type: 'heart' },
     { x: 1000, y: 3060, type: 'ability', ability: AbilityType.Fire     },
-    { x: 2000, y: 3060, type: 'ability', ability: AbilityType.Electric },
+    { x: 2000, y: 3060, type: 'ability', ability: AbilityType.Lightning },
     { x: 3000, y: 3060, type: 'ability', ability: AbilityType.Ice      },
     { x: 4000, y: 3060, type: 'heart' },
   ],
 }
 
 // ─── Level 2: Boss Room (Dad's Lair) ─────────────────────────────────────────
-// Reuses the same boss-room tilemap; dad.png is a placeholder boss.
-// Star-burst orb is in the top-LEFT corner (mirrored from level 1).
+// Map: tileset/boss_two/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const LEVEL2_BOSS_ROOM: RoomConfig = {
   name: "Dad's Lair",
   ...SANCTUM,
-  worldWidth:  50 * 32,   // 1600
-  worldHeight: 50 * 32,   // 1600
-  worldMap: { ...BOSS_MAP },
-  exits: ['left'],
-  exitPositions: { left: 1280 },
+  worldWidth:  99 * 32,   // 3168
+  worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
+  worldMap: { ...BOSS_MAP_TWO },
+  exits: ['left', 'right'],
+  exitPositions: { left: 1952, right: 1952 },
   isBossRoom: true,
+  bossDefeatedKey: 'dadDefeated',
+  backPortal: { x: 2700, y: 1984 },
+  leftExitForward: true,
+  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 428, y: 1952 } },
   bossHp: 20,
   bossKey: 'sheet-dad',
   bossFlying: false,
-  bossSpawnX: 800,
-  bossSpawnY: 1150,
-  starOrbSide: 'left',
-  platforms: [
-    { x: 800, y: 1584, w: 1600, h: 32 },  // bottom seal
-  ],
+  bossSpawnX: 1187,
+  bossSpawnY: 1800,
+  starOrb: { x: 226, y: 174 },
+  platforms: [],
   enemies: [],
   destructibles: [],
-  furnitureSpawns: [
-    { type: 'bookcase', x: 200,  scanFromY: 1280 },
-    { type: 'bookcase', x: 1400, scanFromY: 1280 },
-    { type: 'table',    x: 350,  scanFromY: 1280 },
-    { type: 'table',    x: 1250, scanFromY: 1280 },
-    { type: 'chest',    x: 500,  scanFromY: 1280, ability: AbilityType.Fire },
-    { type: 'chest',    x: 1100, scanFromY: 1280, ability: AbilityType.Ice  },
-  ],
+  furnitureSpawns: [],
   crates: [],
-  items: [
-    { x: 400,  y: 1260, type: 'heart' },
-    { x: 1300, y: 1260, type: 'heart' },
-  ],
+  items: [],
 }
 
-export const RUN_LENGTH = 4
+// ─── Level 3: Main World ──────────────────────────────────────────────────────
+// Map: tileset/three/map.json — 174×183 tiles at 32px = 5568×5856 world pixels
+
+const LEVEL3_WORLD_ROOM: RoomConfig = {
+  name: 'The Abyss',
+  ...HALL,
+  worldWidth:  174 * 32,  // 5568
+  worldHeight: 183 * 32,  // 5856
+  worldMap: { ...MAP_THREE },
+  exits: [],
+  exitPositions: { left: 2928 },
+  entrySpawns: { right: { x: 5300, y: 608 }, left: { x: 597, y: 672 } },
+  bossPortal: { x: 517, y: 672 },
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
+// ─── Level 3: Boss Room (Mom's Lair) ─────────────────────────────────────────
+// Map: tileset/boss_three/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
+
+const BOSS_THREE_ROOM: RoomConfig = {
+  name: "Mom's Lair",
+  ...SANCTUM,
+  worldWidth:  99 * 32,   // 3168
+  worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
+  worldMap: { ...BOSS_MAP_THREE },
+  exits: ['left', 'right'],
+  exitPositions: { left: 640, right: 1952 },
+  isBossRoom: true,
+  bossDefeatedKey: 'momDefeated',
+  rightExitBack: true,
+  entrySpawns: { left: { x: 429, y: 1952 } },
+  bossHp: 25,
+  bossKey: 'sheet-enemy-mom',
+  bossFlying: false,
+  bossSpawnX: 2519,
+  bossSpawnY: 1800,
+  starOrb: { x: 1219, y: 512 },
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
+export const RUN_LENGTH = 6
 
 export function generateRun(): RoomConfig[] {
-  return [WORLD_ROOM, BOSS_TILEMAP_ROOM, LEVEL2_WORLD_ROOM, LEVEL2_BOSS_ROOM]
+  return [
+    WORLD_ROOM,
+    BOSS_TILEMAP_ROOM,
+    LEVEL2_WORLD_ROOM,
+    LEVEL2_BOSS_ROOM,
+    LEVEL3_WORLD_ROOM,
+    BOSS_THREE_ROOM,
+  ]
 }
 
 // Legacy aliases

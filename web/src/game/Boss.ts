@@ -43,7 +43,7 @@ export class Boss extends Enemy {
         this.bossFlying = true
       }
       body.setSize(110, 80)
-      body.setOffset((this.displayWidth - 110) / 2, flying ? 20 : this.displayHeight - 80 - 10)
+      body.setOffset((this.displayWidth - 110) / 2, flying ? 20 : Math.round(this.displayHeight * 0.25))
       const walkAnim = `${textureKey}-walk`
       if (scene.anims.exists(walkAnim)) this.play(walkAnim)
     } else {
@@ -80,7 +80,7 @@ export class Boss extends Enemy {
     this.bossAttackTimer -= dt
     if (this.bossAttackTimer <= 0) {
       this.bossAttackTimer = 3000 + Math.random() * 2000
-      const abilities = [AbilityType.Fire, AbilityType.Electric, AbilityType.Ice]
+      const abilities = [AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
       this.emit('bossAttack', abilities[Math.floor(Math.random() * abilities.length)])
     }
   }

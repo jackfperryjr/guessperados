@@ -5,13 +5,13 @@ import { AbilityType } from '../types'
 export const ABILITY_COLORS: Record<AbilityType, number> = {
   [AbilityType.None]:     0x222222,
   [AbilityType.Fire]:     0xff6600,
-  [AbilityType.Electric]: 0xffdd00,
+  [AbilityType.Lightning]: 0xffdd00,
   [AbilityType.Ice]:      0x66ccff,
 }
 
 const ABILITY_ICON_KEYS: Partial<Record<AbilityType, string>> = {
   [AbilityType.Fire]:     'fire_ability_icon',
-  [AbilityType.Electric]: 'lightning_ability_icon',
+  [AbilityType.Lightning]: 'lightning_ability_icon',
   [AbilityType.Ice]:      'ice_ability_icon',
 }
 
@@ -20,13 +20,15 @@ const FONT = '"Press Start 2P", monospace'
 export class UIManager {
   private scene: Phaser.Scene
   private heartIcons: Phaser.GameObjects.Image[][] = []
-  private abilityBoxes: Phaser.GameObjects.Rectangle[] = []
   private abilityIcons: Phaser.GameObjects.Image[] = []
   private ammoPips: Phaser.GameObjects.Rectangle[][] = []
   private abilityBoxXs: number[] = []
   private rowYs: number[] = []
   private bossBarFill: Phaser.GameObjects.Rectangle | null = null
-  private noAbilityMarks: Phaser.GameObjects.Text[] = []
+  private bossHudObjects: Phaser.GameObjects.GameObject[] = []
+  private emptyAbilityIcons: Phaser.GameObjects.Image[] = []
+  private speedBoostIcons: Phaser.GameObjects.Image[] = []
+  private strengthBoostIcons: Phaser.GameObjects.Image[] = []
 
   constructor(
     scene: Phaser.Scene,
@@ -41,24 +43,26 @@ export class UIManager {
     if (isBossRoom && bossMaxHp > 0) {
       const bx = width - 110
       const by = 22
-      scene.add.text(bx, by - 10, 'BOSS', {
+      const bossLabel = scene.add.text(bx, by - 10, 'BOSS', {
         fontSize: '8px', fontFamily: FONT, color: '#ff4444',
       }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20)
 
-      scene.add.rectangle(bx, by, 152, 12, 0x330000)
+      const bossBg = scene.add.rectangle(bx, by, 152, 12, 0x330000)
         .setScrollFactor(0).setDepth(20)
 
       this.bossBarFill = scene.add.rectangle(bx - 75, by, 150, 10, 0xff2200)
         .setOrigin(0, 0.5)
         .setScrollFactor(0).setDepth(21)
+
+      this.bossHudObjects = [bossLabel, bossBg, this.bossBarFill]
     }
 
     // All players stack vertically on the left
     const ROW_H    = 42
-    const HEAD_SZ  = 28   // display size of the head portrait
-    const HEAD_CX  = 19   // center-x of head portrait
+    const HEAD_SZ  = 56   // display size of the head portrait
+    const HEAD_CX  = 32   // center-x of head portrait
     const SHIFT    = 40   // how far hearts/ability shift right to make room
-    const ABX      = 172 + SHIFT   // ability box x
+    const ABX      = 172 + SHIFT   // ability box x (212)
     const FALLBACK_COLORS = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
 
     const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
@@ -67,7 +71,11 @@ export class UIManager {
       const rowY = 22 + i * ROW_H
       this.rowYs.push(rowY)
 
-      // Character head portrait (no frame)
+      // Black background strip behind this player's HUD row
+      scene.add.rectangle(160, rowY, 320, ROW_H, 0x000000, 0.82)
+        .setScrollFactor(0).setDepth(19)
+
+      // Character head portrait
       const charKey   = selectedChars?.[i]
       const headKey   = charKey ? `head-${charKey}` : ''
       const hasHead   = headKey !== '' && scene.textures.exists(headKey)
@@ -90,19 +98,24 @@ export class UIManager {
 
       this.abilityBoxXs.push(ABX)
 
-      const box = scene.add.rectangle(ABX, rowY, 30, 30, 0x000000)
-        .setScrollFactor(0).setDepth(20).setAlpha(0.35)
+      // Elemental ability slot (no background box)
+      const emptyAbilityIcon = scene.add.image(ABX, rowY, 'empty_ability_icon')
+        .setScale(0.1).setAlpha(0.25).setScrollFactor(0).setDepth(21)
       const abilityIcon = scene.add.image(ABX, rowY, 'fire_ability_icon')
-        .setScale(0.1)
-        .setVisible(false)
-        .setScrollFactor(0).setDepth(21)
-      const noAbilityMark = scene.add.text(ABX, rowY, '✦', {
-        fontSize: '13px', fontFamily: FONT, color: '#444455',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(21)
+        .setScale(0.1).setAlpha(0).setScrollFactor(0).setDepth(22)
 
-      this.abilityBoxes.push(box)
+      // Speed boost slot
+      const speedIcon = scene.add.image(ABX + 40, rowY, 'speed_boost_icon')
+        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+
+      // Strength boost slot
+      const strengthIcon = scene.add.image(ABX + 80, rowY, 'strength_boost_icon')
+        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+
+      this.emptyAbilityIcons.push(emptyAbilityIcon)
       this.abilityIcons.push(abilityIcon)
-      this.noAbilityMarks.push(noAbilityMark)
+      this.speedBoostIcons.push(speedIcon)
+      this.strengthBoostIcons.push(strengthIcon)
       this.ammoPips.push([])
     }
   }
@@ -137,19 +150,20 @@ export class UIManager {
     players.forEach((p, i) => {
       this.heartIcons[i]?.forEach((icon, h) => icon.setAlpha(h < p.hearts ? 1 : 0.2))
       const ability = p.currentAbility
-      this.abilityBoxes[i]?.setFillStyle(ABILITY_COLORS[ability])
       const icon = this.abilityIcons[i]
-      const noMark = this.noAbilityMarks[i]
+      const emptyIcon = this.emptyAbilityIcons[i]
       if (icon) {
         const key = ABILITY_ICON_KEYS[ability]
         if (key) {
-          icon.setTexture(key).setScale(0.1).setVisible(true)
-          noMark?.setVisible(false)
+          icon.setTexture(key).setScale(0.1).setAlpha(1)
+          emptyIcon?.setAlpha(0)
         } else {
-          icon.setVisible(false)
-          noMark?.setVisible(true)
+          icon.setAlpha(0)
+          emptyIcon?.setAlpha(0.25)
         }
       }
+      this.speedBoostIcons[i]?.setAlpha(p.speedBoostActive ? 1 : 0.25)
+      this.strengthBoostIcons[i]?.setAlpha(p.strengthBoostActive ? 1 : 0.25)
     })
   }
 
@@ -157,5 +171,18 @@ export class UIManager {
     if (!this.bossBarFill) return
     const pct = max > 0 ? Math.max(0, current / max) : 0
     this.bossBarFill.width = Math.round(200 * pct)
+  }
+
+  hideBossBar() {
+    if (!this.bossHudObjects.length) return
+    const targets = this.bossHudObjects
+    this.bossHudObjects = []
+    this.bossBarFill = null
+    this.scene.tweens.add({
+      targets,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => targets.forEach(o => (o as Phaser.GameObjects.GameObject & { destroy(): void }).destroy()),
+    })
   }
 }

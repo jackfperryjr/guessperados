@@ -2,6 +2,7 @@
  * Procedural audio via Web Audio API — no external asset files required.
  * All sounds are synthesised at runtime from oscillators and noise buffers.
  */
+import Phaser from 'phaser'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAudioContext = AudioContext & { state: AudioContextState }
@@ -130,6 +131,10 @@ function scheduleWinLoop(start: number): void {
     if (_winPlaying) scheduleWinLoop(start + WIN_LOOP)
   }, Math.max(0, wait))
 }
+
+// ── music track ──────────────────────────────────────────────────────────────
+
+let _track: Phaser.Sound.BaseSound | null = null
 
 // ── public API ────────────────────────────────────────────────────────────────
 
@@ -292,5 +297,21 @@ export const SoundManager = {
   stopVictoryMusic() {
     _winPlaying = false
     if (_winTimer !== null) { clearTimeout(_winTimer); _winTimer = null }
+  },
+
+  // ── music tracks (MP3 files) ──────────────────────────────────────────────
+
+  startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume = 0.75) {
+    if (_track && _track.key === key && (_track as Phaser.Sound.WebAudioSound).isPlaying) return
+    _track?.stop()
+    _track?.destroy()
+    _track = manager.add(key, { loop: true, volume })
+    _track.play()
+  },
+
+  stopTrack() {
+    _track?.stop()
+    _track?.destroy()
+    _track = null
   },
 }

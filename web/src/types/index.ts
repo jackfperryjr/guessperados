@@ -6,7 +6,7 @@ export enum GameState {
 export enum AbilityType {
   None = 'None',
   Fire = 'Fire',
-  Electric = 'Electric',
+  Lightning = 'Lightning',
   Ice = 'Ice',
 }
 
@@ -14,7 +14,7 @@ export enum DamageType {
   Physical = 'Physical',
   Fire = 'Fire',
   Explosion = 'Explosion',
-  Electric = 'Electric',
+  Lightning = 'Lightning',
 }
 
 export interface PlayerConfig {

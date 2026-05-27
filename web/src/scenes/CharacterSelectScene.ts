@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from './BootScene'
 import { NetworkManager } from '../network/NetworkManager'
+import { SoundManager } from '../audio/SoundManager'
 
 const FONT = '"Press Start 2P", monospace'
 const PLAYER_COLORS    = [0xffe066, 0x00ccff, 0x44ff88, 0xff8c00]
@@ -33,6 +34,8 @@ export class CharacterSelectScene extends Phaser.Scene {
   constructor() { super({ key: 'CharacterSelectScene' }) }
 
   create() {
+    SoundManager.whenUnlocked(() => SoundManager.startTrack(this.sound, 'music-title'))
+
     const { width, height } = this.scale
     this.started       = false
     this.playerCount   = this.registry.get('playerCount') ?? 1
