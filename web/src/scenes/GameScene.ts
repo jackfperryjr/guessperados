@@ -33,7 +33,7 @@ function getEntryPos(dir: ExitDir, cfg: RoomConfig): { x: number; y: number } {
   switch (dir) {
     case 'left':   return cfg.isBossRoom
       ? { x: Math.round(cfg.worldWidth / 2), y: ep.left ?? 640 }
-      : { x: 1370, y: ep.left ?? 640 }
+      : { x: cfg.spawnX ?? 1370, y: ep.left ?? 640 }
     case 'right':  return { x: W - 70, y: ep.right  ?? 640 }
     case 'top':    return { x: ep.top    ?? W / 2, y: 80  }
     case 'bottom': return { x: ep.bottom ?? W / 2, y: 640 }
@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene {
   private enemyProjectiles!: Phaser.Physics.Arcade.Group
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup
+  private spikeBalls: Phaser.Physics.Arcade.Image[] = []
   private cameraTarget!: Phaser.GameObjects.Rectangle
   private bgLayers: Phaser.GameObjects.TileSprite[] = []
   private throneLabel: Phaser.GameObjects.Text | null = null
@@ -64,6 +65,7 @@ export class GameScene extends Phaser.Scene {
   private roomTransitioning = false
   private bossDefeated = false
   private bossRoomLeftWall: Phaser.GameObjects.TileSprite | null = null
+  private level2ExitPos: { x: number; y: number } | null = null
   private pauseItems: { text: Phaser.GameObjects.Text; action: () => void }[] = []
   private pauseFocusIdx = 0
   private pauseCursor: Phaser.GameObjects.Text | null = null
@@ -88,7 +90,7 @@ export class GameScene extends Phaser.Scene {
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.inhaleGraphics = []
-    this.tilemapLayers = []
+    this.tilemapLayers = []; this.spikeBalls = []
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
     this.nm = null
@@ -101,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     this.roomTransitioning = false
     this.bossDefeated = false
     this.bossRoomLeftWall = null
+    this.level2ExitPos = null
     this.pauseItems = []
     this.pauseFocusIdx = 0
     this.pauseCursor = null
@@ -614,18 +617,19 @@ export class GameScene extends Phaser.Scene {
       }
       const ringColor = item.type === 'ability'
         ? (ABILITY_RING[item.ability ?? AbilityType.None] ?? 0xffffff)
-        : item.type === 'heart' ? 0xff4d6a : 0xffffff
-      const ring = this.add.circle(item.x, item.y, 20, 0x000000, 0)
-        .setStrokeStyle(2, ringColor)
-        .setDepth(7)
+        : 0xffffff
+      const ring = item.type !== 'heart'
+        ? this.add.circle(item.x, item.y, 20, 0x000000, 0).setStrokeStyle(2, ringColor).setDepth(7)
+        : null
 
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
         .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : 1.2)
       img.setData('item', item)
       img.setData('ring', ring)
 
+      const tweenTargets: Phaser.GameObjects.GameObject[] = ring ? [img, ring] : [img]
       this.tweens.add({
-        targets: [img, ring], y: item.y - 12,
+        targets: tweenTargets, y: item.y - 12,
         duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       this.collectibleSprites.push(img)
@@ -791,7 +795,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
         const bossY = this.cfg.bossSpawnY ?? 620
-        this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000)
+        this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
         const W = this.cfg.worldWidth
         this.boss.on('bossDead', () => {
           this.bossDefeated = true
@@ -799,13 +803,22 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.shake(300, 0.010)
           this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
           this.addScore(2000)
-          this.time.delayedCall(3200, () => {
-            if (!this.roomTransitioning) {
-              this.roomTransitioning = true
-              this.cameras.main.fadeOut(900, 0, 0, 0)
-              this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
-            }
-          })
+
+          const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
+          const runIndex: number       = this.registry.get('runIndex') ?? 0
+          if (runIndex + 1 < runRooms.length) {
+            // More levels — reveal right exit after brief celebration
+            this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
+          } else {
+            // Final boss — auto-victory
+            this.time.delayedCall(3200, () => {
+              if (!this.roomTransitioning) {
+                this.roomTransitioning = true
+                this.cameras.main.fadeOut(900, 0, 0, 0)
+                this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
+              }
+            })
+          }
         })
       }
 
@@ -818,6 +831,16 @@ export class GameScene extends Phaser.Scene {
         halo.fillStyle(0xff8800, 0.10)
         halo.fillRoundedRect(x - 96, cy - 150, 192, 298, { tl: 96, tr: 96, bl: 0, br: 0 })
         this.tweens.add({ targets: halo, alpha: 0.38, duration: 1300, yoyo: true, repeat: -1 })
+
+        // Outer pulsing glow border around the arch frame
+        const glowBorder = this.add.graphics().setDepth(12)
+        glowBorder.lineStyle(8, 0xff6600, 0.6)
+        glowBorder.strokeRoundedRect(x - 90, cy - 144, 180, 290, { tl: 90, tr: 90, bl: 0, br: 0 })
+        const glowBorder2 = this.add.graphics().setDepth(11)
+        glowBorder2.lineStyle(18, 0xff4400, 0.18)
+        glowBorder2.strokeRoundedRect(x - 94, cy - 148, 188, 298, { tl: 94, tr: 94, bl: 0, br: 0 })
+        this.tweens.add({ targets: glowBorder,  alpha: { from: 0.35, to: 1.0 }, duration: 1000, yoyo: true, repeat: -1 })
+        this.tweens.add({ targets: glowBorder2, alpha: { from: 0.15, to: 0.60 }, duration: 1400, yoyo: true, repeat: -1 })
 
         // Stone arch frame: outer (depth 2), then inner recess overlaid on same graphic
         const arch = this.add.graphics().setDepth(2)
@@ -890,7 +913,8 @@ export class GameScene extends Phaser.Scene {
 
       // Star-burst orb — top-right corner of boss room (single use)
       if (this.cfg.isBossRoom) {
-        const orbX = this.cfg.worldWidth - 120, orbY = 220
+        const orbX = this.cfg.starOrbSide === 'left' ? 120 : this.cfg.worldWidth - 120
+        const orbY = 220
         const orbRing = this.add.circle(orbX, orbY, 22, 0x000000, 0)
           .setStrokeStyle(2, 0xffd700).setAlpha(0.45).setDepth(7)
         const orbImg  = this.add.star(orbX, orbY, 6, 8, 20, 0xffd700)
@@ -1061,7 +1085,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.cfg.isBossRoom && this.cfg.bossSpawnX && this.cfg.bossHp) {
-      this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000)
+      this.boss = new Boss(this, this.cfg.bossSpawnX, this.cfg.bossSpawnY ?? 620, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
       this.boss.on('bossDead', () => {
         this.bossDefeated = true
         SoundManager.bossDeath()
@@ -1104,6 +1128,8 @@ export class GameScene extends Phaser.Scene {
         fontSize: '9px', fontFamily: FONT, color: '#aaccff',
       }).setOrigin(0.5).setDepth(11).setVisible(false)
     }
+
+    this.spawnSpikeBalls()
   }
 
   private spawnRandomBreakables() {
@@ -1152,6 +1178,45 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.spawnRoomFurnitureRandom()
+  }
+
+  private spawnSpikeBalls() {
+    if (this.cfg.isBossRoom) return
+
+    if (!this.textures.exists('spike-ball')) {
+      const g = this.add.graphics()
+      g.fillStyle(0x111122, 1)
+      g.fillCircle(24, 24, 22)
+      g.fillStyle(0x3366bb, 0.45)
+      g.fillCircle(17, 16, 10)
+      g.fillStyle(0x99aabb, 1)
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2
+        g.fillTriangle(
+          24 + Math.cos(a) * 31, 24 + Math.sin(a) * 31,
+          24 + Math.cos(a - 0.28) * 20, 24 + Math.sin(a - 0.28) * 20,
+          24 + Math.cos(a + 0.28) * 20, 24 + Math.sin(a + 0.28) * 20,
+        )
+      }
+      g.generateTexture('spike-ball', 48, 48)
+      g.destroy()
+    }
+
+    const W = this.cfg.worldWidth
+    for (let i = 0; i < 3; i++) {
+      const x = Math.round(400 + (i + 0.5) * ((W - 800) / 3) + Phaser.Math.Between(-150, 150))
+      const ball = this.physics.add.image(x, 500, 'spike-ball').setDepth(9)
+      const body = ball.body as Phaser.Physics.Arcade.Body
+      body.setAllowGravity(false)
+      body.setBounce(1, 1)
+      body.setCircle(20, 4, 4)
+      body.setCollideWorldBounds(true)
+      const spd = 110 + Math.random() * 70
+      const ang = Math.random() * Math.PI * 2
+      body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd)
+      this.tweens.add({ targets: ball, angle: 360, duration: 1800 + Math.random() * 800, repeat: -1 })
+      this.spikeBalls.push(ball)
+    }
   }
 
   private spawnFurniturePiece(
@@ -1231,7 +1296,7 @@ export class GameScene extends Phaser.Scene {
       this.addScore(SCORE_DESTRUCT)
       visuals.forEach(go => { if (go.active) go.destroy() })
       if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
-      if (Math.random() < 0.25) this.spawnHeartDrop(obj.x, obj.y)
+      if (Math.random() < 0.15) this.spawnFurnitureDrop(obj.x, obj.y)
     })
   }
 
@@ -1245,6 +1310,45 @@ export class GameScene extends Phaser.Scene {
       if (!img.active) return
       this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
       this.tweens.add({ targets: img, alpha: 0, duration: 500, onComplete: () => { if (img.active) img.destroy() } })
+    })
+  }
+
+  private spawnFurnitureDrop(x: number, y: number) {
+    const roll = Math.random()
+    const ability = roll < 0.4 ? AbilityType.None
+                  : roll < 0.6 ? AbilityType.Fire
+                  : roll < 0.8 ? AbilityType.Electric
+                  : AbilityType.Ice
+
+    if (ability === AbilityType.None) {
+      this.spawnHeartDrop(x, y)
+      return
+    }
+
+    const texMap: Partial<Record<AbilityType, string>> = {
+      [AbilityType.Fire]:     'fire_ability',
+      [AbilityType.Electric]: 'lightning_ability',
+      [AbilityType.Ice]:      'ice_ability',
+    }
+    const ringColorMap: Partial<Record<AbilityType, number>> = {
+      [AbilityType.Fire]: 0xff6600, [AbilityType.Electric]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
+    }
+    const dropY = y - 16
+    const item: ItemSpawn = { type: 'ability', ability, x, y: dropY }
+    const ring = this.add.circle(x, dropY, 20, 0x000000, 0)
+      .setStrokeStyle(2, ringColorMap[ability] ?? 0xffffff).setDepth(7)
+    const img = this.add.image(x, dropY, texMap[ability]!).setDepth(8).setScale(0.12)
+    img.setData('item', item)
+    img.setData('ring', ring)
+    this.tweens.add({ targets: [img, ring], y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    this.collectibleSprites.push(img)
+    this.time.delayedCall(10000, () => {
+      if (!img.active) return
+      this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
+      this.tweens.add({
+        targets: [img, ring], alpha: 0, duration: 500,
+        onComplete: () => { if (img.active) img.destroy(); if (ring.active) ring.destroy() },
+      })
     })
   }
 
@@ -1461,6 +1565,15 @@ export class GameScene extends Phaser.Scene {
       })
     }
 
+    // Spike balls — bounce off world geometry, damage players
+    this.spikeBalls.forEach(ball => {
+      this.physics.add.collider(ball, this.platforms)
+      this.tilemapLayers.forEach(l => this.physics.add.collider(ball, l))
+      this.players.forEach(p => {
+        this.physics.add.overlap(p, ball, () => { p.hitByEnemy() })
+      })
+    })
+
     this.physics.add.overlap(this.projectiles, this.platforms, (proj) => {
       ;(proj as Phaser.Physics.Arcade.Image).destroy()
     })
@@ -1483,19 +1596,50 @@ export class GameScene extends Phaser.Scene {
     SoundManager.meleeSwing()
     const dir = src.flipX ? -1 : 1
     const RANGE = 90, HEIGHT = 70
+
+    // Slash arc — sweeps from above to below the attack point
+    const cx = src.x + dir * 48, cy = src.y
+    const r = 52
+    const startAngle = dir > 0 ? -0.9 : Math.PI + 0.9
+    const endAngle   = dir > 0 ?  0.9 : Math.PI - 0.9
     const gfx = this.add.graphics().setDepth(12)
-    gfx.lineStyle(4, 0xffffff, 0.85)
-    gfx.strokeEllipse(src.x + dir * RANGE / 2, src.y, RANGE, HEIGHT)
-    this.tweens.add({ targets: gfx, alpha: 0, duration: 220, onComplete: () => gfx.destroy() })
+    gfx.lineStyle(5, 0xffffff, 0.95)
+    gfx.beginPath()
+    gfx.arc(cx, cy, r, startAngle, endAngle, dir < 0)
+    gfx.strokePath()
+
+    // Speed lines radiating from the arc midpoint
+    const midAngle = (startAngle + endAngle) / 2
+    for (let i = 0; i < 5; i++) {
+      const a = midAngle + (i - 2) * 0.22
+      const x1 = cx + Math.cos(a) * (r - 6)
+      const y1 = cy + Math.sin(a) * (r - 6)
+      const x2 = cx + Math.cos(a) * (r + 14 + i * 4)
+      const y2 = cy + Math.sin(a) * (r + 14 + i * 4)
+      gfx.lineStyle(2, 0xffffff, 0.6 - i * 0.1)
+      gfx.beginPath(); gfx.moveTo(x1, y1); gfx.lineTo(x2, y2); gfx.strokePath()
+    }
+
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 200, onComplete: () => gfx.destroy() })
 
     this.enemies.forEach(e => {
       if (!e.active) return
       const dx = e.x - src.x, dy = Math.abs(e.y - src.y)
-      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) { e.hit(); this.addScore(SCORE_ENEMY) }
+      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
+        e.hit()
+        this.addScore(SCORE_ENEMY)
+        const eb = e.body as Phaser.Physics.Arcade.Body
+        eb.setVelocityX(dir * 350)
+        eb.setVelocityY(-180)
+      }
     })
     if (this.boss?.active) {
       const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
-      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) this.boss.hit()
+      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
+        this.boss.hit()
+        const bb = this.boss.body as Phaser.Physics.Arcade.Body
+        bb.setVelocityX(dir * 220)
+      }
     }
     this.destructibles.forEach(d => {
       if (!d.active) return
@@ -1827,6 +1971,31 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
   }
 
+  private openLevel2Exit(W: number) {
+    const exitY = this.cfg.exitPositions?.right ?? 1280
+    const exitX = W - 40
+
+    // Glowing doorway on right wall
+    const glow = this.add.graphics().setDepth(8)
+    glow.fillStyle(0x00e5ff, 0.18)
+    glow.fillRect(exitX - 50, exitY - DOOR_H / 2, 60, DOOR_H)
+    glow.lineStyle(3, 0x00e5ff, 0.9)
+    glow.strokeRect(exitX - 50, exitY - DOOR_H / 2, 60, DOOR_H)
+    this.tweens.add({ targets: glow, alpha: { from: 0.4, to: 1 }, duration: 800, yoyo: true, repeat: -1 })
+
+    this.add.text(exitX - 20, exitY - 18, '→', {
+      fontSize: '24px', fontFamily: FONT, color: '#00e5ff',
+      stroke: '#003344', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(9)
+
+    this.add.text(exitX - 20, exitY + 20, 'LVL 2', {
+      fontSize: '7px', fontFamily: FONT, color: '#aaeeff',
+      stroke: '#003344', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(9)
+
+    this.level2ExitPos = { x: exitX, y: exitY }
+  }
+
   private winGame() {
     // Throne door → go to boss room (next index in run)
     this.exitRoom('right')
@@ -2093,6 +2262,14 @@ export class GameScene extends Phaser.Scene {
         this.portalLabel?.setVisible(nearPortal)
         const jumpKey = this.playerKeysets.get(p.playerId)?.['jump']
         if (nearPortal && jumpKey && Phaser.Input.Keyboard.JustDown(jumpKey)) this.winGame()
+      }
+
+      // Level 2 exit — walk close to the right wall after defeating the dragon
+      if (this.level2ExitPos && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        if (Phaser.Math.Distance.Between(p.x, p.y, this.level2ExitPos.x, this.level2ExitPos.y) < 80) {
+          this.exitRoom('right')
+          return
+        }
       }
     })
 

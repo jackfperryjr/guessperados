@@ -82,6 +82,9 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private buildUI(cx: number, cy: number) {
+    const runIndex: number = this.registry.get('runIndex') ?? 0
+    const beatLevel2 = runIndex >= 3
+
     // Title — slides down from above
     const title = this.add.text(cx, cy - 260, 'YOU WIN!', {
       fontSize: '60px', fontFamily: FONT, color: '#ffe066',
@@ -89,13 +92,13 @@ export class VictoryScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0)
 
     // Message lines
-    const msg1 = this.add.text(cx, cy - 70, 'ONE LEVEL DOWN,', {
+    const msg1 = this.add.text(cx, cy - 70, beatLevel2 ? 'TWO LEVELS DOWN!' : 'ONE LEVEL DOWN,', {
       fontSize: '18px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setAlpha(0)
 
-    const msg2 = this.add.text(cx, cy - 30, 'MORE TO COME SOON!', {
-      fontSize: '18px', fontFamily: FONT, color: '#80d8ff',
+    const msg2 = this.add.text(cx, cy - 30, beatLevel2 ? 'DAD HAS BEEN SLAIN!' : 'MORE TO COME SOON!', {
+      fontSize: '18px', fontFamily: FONT, color: beatLevel2 ? '#ffb3c6' : '#80d8ff',
       stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setAlpha(0)
 
