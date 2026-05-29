@@ -635,17 +635,18 @@ export class GameScene extends Phaser.Scene {
         [AbilityType.Lightning]: 'lightning_ability',
         [AbilityType.Ice]:      'ice_ability',
       }
-      const tex = item.type === 'heart'   ? 'item-heart'
-                : item.type === 'pizza'   ? 'item-pizza'
-                : item.type === 'worm'    ? 'item-worm'
-                : item.type === 'life'    ? 'item-life'
-                : item.type === 'mystery' ? 'item-mystery'
-                : item.type === 'ability' ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
+      const tex = item.type === 'heart'     ? 'item-heart'
+                : item.type === 'pizza'     ? 'item-pizza'
+                : item.type === 'worm'      ? 'item-worm'
+                : item.type === 'roly-poly' ? 'item-roly-poly'
+                : item.type === 'life'      ? 'item-life'
+                : item.type === 'mystery'   ? 'item-mystery'
+                : item.type === 'ability'   ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
                 : 'item-orb'
       const isHidden = item.type === 'speed' || item.type === 'attack-boost'
-      const frame = item.type === 'worm' ? 4 : undefined
-      const img = this.add.image(item.x, item.y, tex, frame).setDepth(8)
-        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : item.type === 'worm' ? 1.0 : 1.2)
+      const img = this.add.image(item.x, item.y, tex).setDepth(8)
+        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12
+          : item.type === 'worm' || item.type === 'roly-poly' ? 1.0 : 1.2)
       if (isHidden) img.setAlpha(0)
       img.setData('item', item)
       this.tweens.add({
@@ -1307,7 +1308,10 @@ export class GameScene extends Phaser.Scene {
   private spawnSpikeBalls() {
     if (this.cfg.isBossRoom) return
 
-    if (!this.textures.exists('spike-ball')) {
+    // Always generate a fresh procedural texture — avoids relying on the
+    // preloaded spike-ball PNG which may be too small or poorly visible.
+    const GFX = 'spike-ball-gfx'
+    if (!this.textures.exists(GFX)) {
       const g = this.add.graphics()
       g.fillStyle(0x111122, 1)
       g.fillCircle(24, 24, 22)
@@ -1322,14 +1326,12 @@ export class GameScene extends Phaser.Scene {
           24 + Math.cos(a + 0.28) * 20, 24 + Math.sin(a + 0.28) * 20,
         )
       }
-      g.generateTexture('spike-ball', 48, 48)
+      g.generateTexture(GFX, 48, 48)
       g.destroy()
     }
 
-    const W = this.cfg.worldWidth
-    for (let i = 0; i < 3; i++) {
-      const x = Math.round(400 + (i + 0.5) * ((W - 800) / 3) + Phaser.Math.Between(-150, 150))
-      const ball = this.physics.add.image(x, 500, 'spike-ball').setDepth(9)
+    const spawnBall = (x: number, y: number) => {
+      const ball = this.physics.add.image(x, y, GFX).setDepth(9)
       const body = ball.body as Phaser.Physics.Arcade.Body
       body.setAllowGravity(false)
       body.setBounce(1, 1)
@@ -1340,6 +1342,13 @@ export class GameScene extends Phaser.Scene {
       body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd)
       this.tweens.add({ targets: ball, angle: 360, duration: 1800 + Math.random() * 800, repeat: -1 })
       this.spikeBalls.push(ball)
+    }
+
+    for (const spawn of (this.cfg.spikeBalls ?? [])) {
+      const count = spawn.count ?? 1
+      for (let i = 0; i < count; i++) {
+        spawnBall(spawn.x + Phaser.Math.Between(-24, 24), spawn.y)
+      }
     }
   }
 
@@ -1828,8 +1837,8 @@ export class GameScene extends Phaser.Scene {
 
     this.tweens.add({ targets: gfx, alpha: 0, duration: 200, onComplete: () => gfx.destroy() })
 
-    // Delay contact until the arc reaches peak extension (edge of swing animation)
-    this.time.delayedCall(150, () => {
+    // Damage fires as arc peaks — enemies knocked away, boss pushed back
+    this.time.delayedCall(70, () => {
       if (!src.active) return
       this.enemies.forEach(e => {
         if (!e.active) return
@@ -1839,14 +1848,17 @@ export class GameScene extends Phaser.Scene {
           const eb = e.body as Phaser.Physics.Arcade.Body
           eb.setVelocityX(dir * 900)
           eb.setVelocityY(-420)
+          e.stun(400)
         }
       })
       if (this.boss?.active) {
-        const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
+        const bb = this.boss.body as Phaser.Physics.Arcade.Body
+        const dx = this.boss.x - src.x
+        const dy = Math.abs(bb.center.y - src.y)
         if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
           this.hitBoss(src)
-          const bb = this.boss.body as Phaser.Physics.Arcade.Body
           bb.setVelocityX(dir * 300)
+          bb.setVelocityY(-180)
         }
       }
       this.destructibles.forEach(d => {

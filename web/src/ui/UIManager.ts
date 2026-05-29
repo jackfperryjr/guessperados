@@ -128,7 +128,7 @@ export class UIManager {
     const WORM_IX = 334  // worm icon center
     const ROLY_IX = 394  // roly-poly icon center (28px icon + 10px gap + label width ≈ 60px apart)
     if (scene.textures.exists('item-worm')) {
-      scene.add.image(WORM_IX, CTR_Y, 'item-worm', 4)
+      scene.add.image(WORM_IX, CTR_Y, 'item-worm')
         .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
     }
     this.wormCountText = scene.add.text(WORM_IX + 17, CTR_Y, '0', {
@@ -137,7 +137,7 @@ export class UIManager {
     }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(20)
 
     if (scene.textures.exists('item-roly-poly')) {
-      scene.add.image(ROLY_IX, CTR_Y, 'item-roly-poly', 4)
+      scene.add.image(ROLY_IX, CTR_Y, 'item-roly-poly')
         .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
     }
     this.rolyPolyCountText = scene.add.text(ROLY_IX + 17, CTR_Y, '0', {

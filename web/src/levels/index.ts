@@ -34,6 +34,11 @@ export interface SpikeFloorSpawn {
   scale?: number      // display scale multiplier (step = scale * 32, defaults to 1)
 }
 
+export interface SpikeBallSpawn {
+  x: number; y: number
+  count?: number      // number of balls to spawn at this position (default 1)
+}
+
 export interface RoomConfig {
   name: string
   worldWidth: number
@@ -75,6 +80,7 @@ export interface RoomConfig {
   destructibles: DestructibleSpawn[]
   furnitureSpawns?: FurnitureSpawn[]
   spikeFloors?: SpikeFloorSpawn[]
+  spikeBalls?: SpikeBallSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
 }
@@ -185,7 +191,7 @@ const WORLD_ROOM: RoomConfig = {
   ],
   spikeFloors: [
     { x: 2305, y: 3205, xEnd: 2721, scale: 2 },
-    { x: 178,  y: 2620, xEnd: 700,  scale: 2 },
+    { x: 163,  y: 2625, xEnd: 685,  scale: 2 },
   ],
   crates: [
     { x: 1800, y: 580 }, { x: 2500, y: 580 },
@@ -221,7 +227,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   bossKey: 'sheet-king-skeleton',
   bossFlying: false,
   bossSpawnX: 1331,
-  bossSpawnY: 1220,
+  bossSpawnY: 1213,
   bossRightBarrierX: 1497,
   bossRightBarrierY: 1276,
   platforms: [
@@ -254,92 +260,68 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   worldMap: { ...MAP_TWO },
   exits: [],
   exitPositions: { left: 3584 },
-  spawnX: 314,              // spawn at floor level, clear of the left-edge exit
+  spawnX: 314,
   bossPortal: { x: 774, y: 736 },
   platforms: [],
-  enemies: [],
+  enemies: [
+    // Bottom floor
+    { x: 1521, y: 3324, ability: AbilityType.Fire },
+    { x: 3122, y: 3500, ability: AbilityType.Fire },
+    { x: 3178, y: 3500, ability: AbilityType.Fire },
+    { x: 3503, y: 3500, ability: AbilityType.Lightning },
+    { x: 5116, y: 3500, ability: AbilityType.Fire },
+    { x: 5172, y: 3500, ability: AbilityType.Fire },
+    { x: 5228, y: 3500, ability: AbilityType.Fire },
+    { x: 4003, y: 3004, ability: AbilityType.Fire },
+    { x: 4059, y: 3004, ability: AbilityType.Fire },
+    // Bats — mid level
+    { x: 3203, y: 2832, ability: AbilityType.Bat },
+    { x: 3259, y: 2832, ability: AbilityType.Bat },
+    { x: 3315, y: 2832, ability: AbilityType.Bat },
+    // Upper level
+    { x: 3676, y:  508, ability: AbilityType.Fire },
+    { x: 3732, y:  508, ability: AbilityType.Fire },
+    { x: 3788, y:  508, ability: AbilityType.Fire },
+    { x: 4988, y:  860, ability: AbilityType.Bat },
+    { x: 5044, y:  860, ability: AbilityType.Bat },
+    { x: 5100, y:  860, ability: AbilityType.Bat },
+  ],
   destructibles: [],
   furnitureSpawns: [
-    // Bottom floor swath x≈300–5300, scanFromY=3050
-    { type: 'bookcase', x:  360, scanFromY: 3050 },
-    { type: 'bookcase', x:  480, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x:  600, scanFromY: 3050 },
-    { type: 'bookcase', x:  720, scanFromY: 3050 },
-    { type: 'bookcase', x:  840, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x:  960, scanFromY: 3050 },
-    { type: 'bookcase', x: 1080, scanFromY: 3050 },
-    { type: 'bookcase', x: 1200, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 1440, scanFromY: 3050 },
-    { type: 'bookcase', x: 1680, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 1920, scanFromY: 3050 },
-    { type: 'bookcase', x: 2160, scanFromY: 3050 },
-    { type: 'bookcase', x: 2400, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 2640, scanFromY: 3050 },
-    { type: 'bookcase', x: 2880, scanFromY: 3050 },
-    { type: 'bookcase', x: 3120, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 3360, scanFromY: 3050 },
-    { type: 'bookcase', x: 3600, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 3840, scanFromY: 3050 },
-    { type: 'bookcase', x: 4080, scanFromY: 3050 },
-    { type: 'bookcase', x: 4320, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 4560, scanFromY: 3050 },
-    { type: 'bookcase', x: 4800, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 5040, scanFromY: 3050 },
-    { type: 'bookcase', x: 5280, scanFromY: 3050 },
-    { type: 'table', x:  400, scanFromY: 3050 },
-    { type: 'table', x:  640, scanFromY: 3050 },
-    { type: 'table', x:  880, scanFromY: 3050 },
-    { type: 'table', x: 1120, scanFromY: 3050 },
-    { type: 'table', x: 1360, scanFromY: 3050 },
-    { type: 'table', x: 1600, scanFromY: 3050 },
-    { type: 'table', x: 1840, scanFromY: 3050 },
-    { type: 'table', x: 2080, scanFromY: 3050 },
-    { type: 'table', x: 2320, scanFromY: 3050 },
-    { type: 'table', x: 2560, scanFromY: 3050 },
-    { type: 'table', x: 2800, scanFromY: 3050 },
-    { type: 'table', x: 3040, scanFromY: 3050 },
-    { type: 'table', x: 3280, scanFromY: 3050 },
-    { type: 'table', x: 3520, scanFromY: 3050 },
-    { type: 'table', x: 3760, scanFromY: 3050 },
-    { type: 'table', x: 4000, scanFromY: 3050 },
-    { type: 'table', x: 4240, scanFromY: 3050 },
-    { type: 'table', x: 4480, scanFromY: 3050 },
-    { type: 'table', x: 4720, scanFromY: 3050 },
-    { type: 'table', x: 4960, scanFromY: 3050 },
-    { type: 'table', x: 5200, scanFromY: 3050 },
-    { type: 'chest', x:  440, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x:  680, scanFromY: 3050 },
-    { type: 'chest', x:  920, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 1160, scanFromY: 3050 },
-    { type: 'chest', x: 1400, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 1760, scanFromY: 3050 },
-    { type: 'chest', x: 2000, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 2240, scanFromY: 3050 },
-    { type: 'chest', x: 2480, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 2720, scanFromY: 3050 },
-    { type: 'chest', x: 2960, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 3200, scanFromY: 3050 },
-    { type: 'chest', x: 3440, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 3680, scanFromY: 3050 },
-    { type: 'chest', x: 3920, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 4160, scanFromY: 3050 },
-    { type: 'chest', x: 4400, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 4640, scanFromY: 3050 },
-    { type: 'chest', x: 4880, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 5120, scanFromY: 3050 },
-    { type: 'chest', x: 5360, scanFromY: 3050 },
+    // Bottom floor
+    { type: 'table',    x:  488, y: 3369 },
+    { type: 'bookcase', x:  544, y: 3356 },
+    { type: 'bookcase', x: 1229, y: 3324 },
+    { type: 'table',    x: 3003, y: 3337 },
+    { type: 'table',    x: 3345, y: 3017 },
+    { type: 'bookcase', x: 3401, y: 3004 },
+    { type: 'table',    x: 5082, y: 3017 },
+    { type: 'bookcase', x: 5138, y: 3004 },
+    // Mid level
+    { type: 'bookcase', x:  895, y: 2012 },
+    { type: 'table',    x: 1974, y: 2025 },
+    { type: 'table',    x: 4412, y: 2025 },
+    // Upper level
+    { type: 'table',    x:  499, y: 1801 },
+    { type: 'bookcase', x:  555, y: 1788 },
+    { type: 'table',    x:  705, y: 1353 },
+    { type: 'bookcase', x: 1726, y: 1340 },
+    { type: 'bookcase', x: 2963, y:  892 },
   ],
-  crates: [
-    { x:  700, y: 3080 }, { x: 1500, y: 3080 },
-    { x: 2500, y: 3080 }, { x: 3500, y: 3080 },
-    { x: 4500, y: 3080 },
+  spikeFloors: [
+    { x: 178, y: 3004, xEnd: 796, scale: 2 },
   ],
+  spikeBalls: [
+    { x: 5177, y: 2332, count: 2 },
+    { x: 2800, y: 2620, count: 1 },
+    { x: 1611, y: 3004, count: 2 },
+    { x: 2516, y: 1564, count: 3 },
+  ],
+  crates: [],
   items: [
-    { x:  500, y: 3060, type: 'heart' },
-    { x: 1000, y: 3060, type: 'ability', ability: AbilityType.Fire     },
-    { x: 2000, y: 3060, type: 'ability', ability: AbilityType.Lightning },
-    { x: 3000, y: 3060, type: 'ability', ability: AbilityType.Ice      },
-    { x: 4000, y: 3060, type: 'heart' },
+    { x: 2056, y: 3500, type: 'roly-poly' },
+    { x: 5404, y: 2012, type: 'roly-poly' },
+    { x: 3666, y: 1116, type: 'roly-poly' },
   ],
 }
 
@@ -364,7 +346,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   bossKey: 'sheet-king-zombie',
   bossFlying: false,
   bossSpawnX: 1187,
-  bossSpawnY: 1800,
+  bossSpawnY: 1805,
   starOrb: { x: 226, y: 174 },
   platforms: [],
   enemies: [],
@@ -387,7 +369,7 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   exitPositions: { left: 2928 },
   entrySpawns: { right: { x: 5300, y: 608 }, left: { x: 597, y: 672 } },
   bossPortal: { x: 517, y: 672 },
-  barrierExit: { x: 5350, y: 608 },
+  barrierExit: { x: 5500, y: 608 },
   backPortalEntryDir: 'left',
   platforms: [
     { x: 5300, y: 650, w: 400, h: 20 },   // buffer at right-entry spawn to prevent fall

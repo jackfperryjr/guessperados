@@ -35,6 +35,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private beingPulled = false
   private readonly animKey: string
   private attackTimer: number
+  private stunTimer = 0
   protected hp = 3
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
@@ -63,6 +64,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   update() {
     if (this.beingPulled) return
+    if (this.stunTimer > 0) {
+      this.stunTimer -= this.scene.game.loop.delta
+      return
+    }
     const body = this.body as Phaser.Physics.Arcade.Body
 
     if (this.flying) {
@@ -115,8 +120,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     })
   }
 
-  stun(_ms: number) {
-    ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
+  stun(ms: number) {
+    this.stunTimer = ms
   }
 
   hit() {
