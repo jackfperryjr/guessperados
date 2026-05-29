@@ -30,6 +30,7 @@ export class UIManager {
   private emptyAbilityIcons: Phaser.GameObjects.Image[] = []
   private speedBoostIcons: Phaser.GameObjects.Image[] = []
   private strengthBoostIcons: Phaser.GameObjects.Image[] = []
+  private invulnerabilityIcons: Phaser.GameObjects.Image[] = []
   private wormCountText: Phaser.GameObjects.Text | null = null
   private rolyPolyCountText: Phaser.GameObjects.Text | null = null
 
@@ -109,17 +110,22 @@ export class UIManager {
         .setScale(0.1).setAlpha(0).setScrollFactor(0).setDepth(22)
 
       // Speed boost slot
-      const speedIcon = scene.add.image(ABX + 40, rowY, 'speed_boost_icon')
-        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+      const speedIcon = scene.add.image(ABX + 28, rowY, 'speed_boost_icon')
+        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
 
       // Strength boost slot
-      const strengthIcon = scene.add.image(ABX + 80, rowY, 'strength_boost_icon')
-        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+      const strengthIcon = scene.add.image(ABX + 58, rowY, 'strength_boost_icon')
+        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+
+      // Invulnerability slot
+      const invulnIcon = scene.add.image(ABX + 88, rowY, 'invulnerability_icon')
+        .setDisplaySize(20, 20).setAlpha(0.25).setScrollFactor(0).setDepth(21)
 
       this.emptyAbilityIcons.push(emptyAbilityIcon)
       this.abilityIcons.push(abilityIcon)
       this.speedBoostIcons.push(speedIcon)
       this.strengthBoostIcons.push(strengthIcon)
+      this.invulnerabilityIcons.push(invulnIcon)
       this.ammoPips.push([])
     }
 
@@ -177,6 +183,7 @@ export class UIManager {
       this.heartIcons[i]?.forEach((icon, h) => icon.setAlpha(h < p.hearts ? 1 : 0.2))
       this.speedBoostIcons[i]?.setAlpha(p.speedBoostActive ? 1 : 0.25)
       this.strengthBoostIcons[i]?.setAlpha(p.strengthBoostActive ? 1 : 0.25)
+      this.invulnerabilityIcons[i]?.setAlpha(p.invulnerabilityActive ? 1 : 0.25)
     })
   }
 

@@ -156,6 +156,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('empty_ability_icon',     'assets/game_icons/empty_ability.png')
     this.load.image('speed_boost_icon',       'assets/game_icons/speed.png')
     this.load.image('strength_boost_icon',    'assets/game_icons/strength.png')
+    this.load.image('invulnerability_icon',   'assets/game_icons/invulnerable.png')
     this.load.image('fire_ability',           'assets/game_icons/fire_ability.png')
     this.load.image('lightning_ability',      'assets/game_icons/lightning_ability.png')
     this.load.image('ice_ability',            'assets/game_icons/ice_ability.png')
@@ -185,6 +186,14 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
     this.load.audio('music-boss',     'assets/music/boss_dragon.mp3')
+    // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
+    const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
+    for (const char of CUTSCENE_CHARS) {
+      // scarlett's skeleton king filename has a typo
+      const skelFile = char === 'scarlett' ? `${char}_skeletong_king.jpg` : `${char}_skeleton_king.jpg`
+      this.load.image(`cutscene-${char}-skeleton_king`, `assets/players/${skelFile}`)
+      this.load.image(`cutscene-${char}-zombie_king`,   `assets/players/${char}_zombie_king.jpg`)
+    }
   }
 
   create() {

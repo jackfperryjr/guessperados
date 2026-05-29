@@ -12,7 +12,7 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly'
+export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
@@ -56,6 +56,8 @@ export interface RoomConfig {
   bossName?: string
   bossKey?: string
   bossFlying?: boolean
+  bossStationary?: boolean    // boss stays in place, no patrol movement
+  bossAttackRate?: number     // ms between boss attacks (default 3000)
   bossSpawnX?: number
   bossSpawnY?: number
   bossPortal?: { x: number; y: number }
@@ -74,6 +76,7 @@ export interface RoomConfig {
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
+  comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
   platforms: Platform[]
   slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
@@ -201,6 +204,7 @@ const WORLD_ROOM: RoomConfig = {
     { x:  148, y:  502, type: 'speed' },
     { x: 1456, y:  502, type: 'attack-boost' },
     { x:  176, y: 1870, type: 'speed' },
+    { x:  780, y:  426, type: 'invulnerability' },
     { x: 1778, y: 2460, type: 'worm' },
     { x:  369, y: 1948, type: 'worm' },
     { x: 3196, y: 1660, type: 'worm' },
@@ -340,7 +344,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   bossDefeatedKey: 'dadDefeated',
   backPortal: { x: 2700, y: 1956 },
   leftExitForward: true,
-  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 428, y: 1952 } },
+  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 300, y: 1948 } },
   bossHp: 20,
   bossName: 'KING ZOMBIE',
   bossKey: 'sheet-king-zombie',
@@ -378,6 +382,21 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   enemies: [],
   destructibles: [],
   furnitureSpawns: [],
+  spikeFloors: [
+    { x: 178, y: 3580, xEnd: 3580, scale: 2 },
+  ],
+  spikeBalls: [
+    // mid-map cluster (redistributed from top-left and top-right)
+    { x: 1800, y: 1400, count: 3 },
+    { x: 3400, y: 4000, count: 4 },
+    { x: 1200, y: 1800, count: 3 },
+    { x: 3600, y: 2000, count: 4 },
+    // bottom corners
+    { x:  400, y: 5500, count: 7 },
+    { x: 5200, y: 5500, count: 7 },
+    // center
+    { x: 2784, y: 2928, count: 5 },
+  ],
   crates: [],
   items: [],
 }
@@ -402,13 +421,15 @@ const BOSS_THREE_ROOM: RoomConfig = {
   bossName: 'CELERY MAN',
   bossKey: 'sheet-celery',
   bossFlying: false,
+  bossStationary: true,
+  bossAttackRate: 700,
   bossSpawnX: 2519,
   bossSpawnY: 1800,
   starOrb: { x: 1219, y: 512 },
-  barrierVisual: { x: 3104, y: 1952, w: 32, h: 260 },
+  comingSoonGlowRight: true,
   platforms: [
     { x: 16,   y: 640,  w: 32, h: 130 },   // seal left exit
-    { x: 3152, y: 1952, w: 32, h: 130 },   // seal right exit
+    { x: 3152, y: 1952, w: 32, h: 130 },   // invisible barrier keeps right exit sealed
   ],
   enemies: [],
   destructibles: [],

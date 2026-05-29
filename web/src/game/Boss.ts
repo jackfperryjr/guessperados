@@ -15,6 +15,8 @@ export class Boss extends Enemy {
   private invincible = false
   private bossAttackTimer: number
   private bossFlying = false
+  private bossStationary = false
+  private attackRate: number
   private spawnY = 0
   players: Player[] = []
 
@@ -26,11 +28,15 @@ export class Boss extends Enemy {
     _attackInterval = 3000,
     textureKey = 'sheet-dragon',
     flying = true,
+    stationary = false,
+    attackRate = 3000,
   ) {
     super(scene, x, y, AbilityType.None)
     this.hp = hp
     this.maxHp = hp
-    this.bossAttackTimer = 2000 + Math.random() * 1500
+    this.bossStationary = stationary
+    this.attackRate = attackRate
+    this.bossAttackTimer = attackRate * (0.6 + Math.random() * 0.4)
     this.spawnY = y
 
     const body = this.body as Phaser.Physics.Arcade.Body
@@ -69,10 +75,14 @@ export class Boss extends Enemy {
       return
     }
 
-    // Hover patrol — reverse at walls
-    if (body.blocked.left)  this.bossWalkDir = 1
-    if (body.blocked.right) this.bossWalkDir = -1
-    body.setVelocityX(PATROL_SPEED * this.bossWalkDir)
+    // Patrol (stationary bosses stay put)
+    if (!this.bossStationary) {
+      if (body.blocked.left)  this.bossWalkDir = 1
+      if (body.blocked.right) this.bossWalkDir = -1
+      body.setVelocityX(PATROL_SPEED * this.bossWalkDir)
+    } else {
+      body.setVelocityX(0)
+    }
     if (this.bossFlying) {
       // Spring keeps boss near spawnY so it can't drift to the floor
       body.setVelocityY(Math.sin(this.scene.time.now / 800) * 55 - (this.y - this.spawnY) * 2)
@@ -82,7 +92,7 @@ export class Boss extends Enemy {
     // Attack timer
     this.bossAttackTimer -= dt
     if (this.bossAttackTimer <= 0) {
-      this.bossAttackTimer = 3000 + Math.random() * 2000
+      this.bossAttackTimer = this.attackRate * (0.8 + Math.random() * 0.4)
       const abilities = [AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
       this.emit('bossAttack', abilities[Math.floor(Math.random() * abilities.length)])
     }

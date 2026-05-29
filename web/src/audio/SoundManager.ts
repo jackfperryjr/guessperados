@@ -135,6 +135,25 @@ function scheduleWinLoop(start: number): void {
 // ── music track ──────────────────────────────────────────────────────────────
 
 let _track: Phaser.Sound.BaseSound | null = null
+let _fadeTimer: ReturnType<typeof setInterval> | null = null
+
+function clearFadeTimer() {
+  if (_fadeTimer !== null) { clearInterval(_fadeTimer); _fadeTimer = null }
+}
+
+function _startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume: number) {
+  _track = manager.add(key, { loop: true, volume: key === 'music-gameplay' ? 0 : volume })
+  _track.play()
+  if (key === 'music-gameplay') {
+    let v = 0
+    _fadeTimer = setInterval(() => {
+      if (!_track || _track.key !== key) { clearFadeTimer(); return }
+      v = Math.min(volume, v + volume / 15)
+      try { (_track as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+      if (v >= volume) clearFadeTimer()
+    }, 100)
+  }
+}
 
 // ── public API ────────────────────────────────────────────────────────────────
 
@@ -303,15 +322,45 @@ export const SoundManager = {
 
   startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume = 0.75) {
     if (_track && _track.key === key && (_track as Phaser.Sound.WebAudioSound).isPlaying) return
-    _track?.stop()
-    _track?.destroy()
-    _track = manager.add(key, { loop: true, volume })
-    _track.play()
+    clearFadeTimer()
+
+    // Fade out old gameplay track before switching to a new one
+    const old = _track
+    _track = null
+    if (old && old.key === 'music-gameplay') {
+      let v = (old as Phaser.Sound.WebAudioSound).volume ?? volume
+      _fadeTimer = setInterval(() => {
+        v = Math.max(0, v - v * 0.35)
+        try { (old as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+        if (v < 0.02) {
+          clearFadeTimer()
+          try { old.stop(); old.destroy() } catch (_e) {}
+          _startTrack(manager, key, volume)
+        }
+      }, 60)
+    } else {
+      old?.stop(); old?.destroy()
+      _startTrack(manager, key, volume)
+    }
   },
 
   stopTrack() {
-    _track?.stop()
-    _track?.destroy()
+    clearFadeTimer()
+    if (!_track) return
+    const t = _track
     _track = null
+    if (t.key === 'music-gameplay') {
+      let v = (t as Phaser.Sound.WebAudioSound).volume ?? 0.75
+      _fadeTimer = setInterval(() => {
+        v = Math.max(0, v - v * 0.35)
+        try { (t as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+        if (v < 0.02) {
+          clearFadeTimer()
+          try { t.stop(); t.destroy() } catch (_e) {}
+        }
+      }, 60)
+    } else {
+      t.stop(); t.destroy()
+    }
   },
 }
