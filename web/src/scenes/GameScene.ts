@@ -898,7 +898,6 @@ export class GameScene extends Phaser.Scene {
               this.bossRoomRightBarrier = null
             }
             SoundManager.bossDeath()
-            SoundManager.startTrack(this.sound, 'music-gameplay')
             this.cameras.main.shake(300, 0.010)
             this.showPopup(W / 2, 400, 'BOSS DEFEATED!', '#ffe066')
             this.addScore(2000)
@@ -911,19 +910,19 @@ export class GameScene extends Phaser.Scene {
             const cutsceneSuffix = dk === 'dragonDefeated' ? 'skeleton_king' : 'zombie_king'
 
             if (hasCutscene) {
-              this.time.delayedCall(900, () => {
-                this.showBossCutscene(cutsceneSuffix, () => {
-                  if (this.cfg.backPortal) this.buildBackPortal()
-                  if (runIndex + 1 < runRooms.length) this.openLevel2Exit(W)
-                  else this.showBossDefeatedOverlay()
-                })
+              // Show cutscene immediately — it handles its own music
+              this.showBossCutscene(cutsceneSuffix, () => {
+                if (this.cfg.backPortal) this.buildBackPortal()
+                if (runIndex + 1 < runRooms.length) this.openLevel2Exit(W)
+                else this.showBossDefeatedOverlay()
               })
             } else if (runIndex + 1 < runRooms.length) {
               // More levels — reveal right exit and back portal after brief celebration
+              SoundManager.startTrack(this.sound, 'music-gameplay')
               if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
               this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
             } else {
-              // Final boss — show explore/exit overlay instead of auto-transitioning
+              // Final boss — fanfare + overlay
               if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
               this.time.delayedCall(1800, () => this.showBossDefeatedOverlay())
             }
@@ -1118,23 +1117,25 @@ export class GameScene extends Phaser.Scene {
 
       // Coming-soon glow at right exit — white-yellow gradient, no hard wall visual
       if (this.cfg.comingSoonGlowRight) {
-        const W2 = this.cfg.worldWidth
-        const ey = this.cfg.exitPositions?.right ?? 1952
+        const W2  = this.cfg.worldWidth
+        const ey  = this.cfg.exitPositions?.right ?? 1952
+        const gy  = ey - 25   // glow center shifted up 25px
         const color = 0xffee88
         const gg = this.add.graphics().setDepth(3)
         for (let i = 9; i >= 0; i--) {
           const t   = i / 9
           const exp = t * 52
           gg.fillStyle(color, (1 - t) * 0.30 + 0.02)
-          gg.fillRect(W2 - 16 - exp, ey - 65 - exp, 16 + exp * 2, 130 + exp * 2)
+          gg.fillRect(W2 - 16 - exp, gy - 65 - exp, 16 + exp * 2, 130 + exp * 2)
         }
         gg.lineStyle(2, color, 0.90)
-        gg.strokeRect(W2 - 16, ey - 65, 16, 130)
+        gg.strokeRect(W2 - 16, gy - 65, 16, 130)
         gg.lineStyle(3, color, 1)
-        gg.beginPath(); gg.moveTo(W2 - 16, ey - 70); gg.lineTo(W2 - 16, ey + 70); gg.strokePath()
-        gg.beginPath(); gg.moveTo(W2,      ey - 70); gg.lineTo(W2,      ey + 70); gg.strokePath()
+        gg.beginPath(); gg.moveTo(W2 - 16, gy - 70); gg.lineTo(W2 - 16, gy + 70); gg.strokePath()
+        gg.beginPath(); gg.moveTo(W2,      gy - 70); gg.lineTo(W2,      gy + 70); gg.strokePath()
         this.tweens.add({ targets: gg, alpha: { from: 0.65, to: 1 }, duration: 1200, yoyo: true, repeat: -1 })
-        this.add.text(W2 - 28, ey - 90, 'COMING SOON!', {
+        // Text: original position adjusted — left 10px, down 20px
+        this.add.text(W2 - 58, ey - 70, 'COMING SOON!', {
           fontSize: '9px', fontFamily: FONT, color: '#ffee88',
           stroke: '#000000', strokeThickness: 3,
         }).setOrigin(1, 0.5).setDepth(10)
@@ -2324,35 +2325,39 @@ export class GameScene extends Phaser.Scene {
     const chars = (selectedChars ?? ['conrad']).slice(0, 4)
 
     this.physics.world.isPaused = true
+    SoundManager.stopTrack()
+    SoundManager.startCutsceneMusic()
 
-    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 0)
+    // Immediately black — no fade so the game world is never visible behind the cutscene
+    this.cameras.main.setBackgroundColor('#000000')
+    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
       .setScrollFactor(0).setDepth(200)
-    this.tweens.add({ targets: bg, alpha: 1, duration: 400 })
 
     const elements: Phaser.GameObjects.GameObject[] = [bg]
 
-    // Show each player's character cutscene (full-screen for one, side-by-side for multiple)
+    // Show each player's character cutscene centered, aspect-ratio preserved
     const count = chars.length
     chars.forEach((charKey, idx) => {
       const imgKey = `cutscene-${charKey}-${suffix}`
       if (!this.textures.exists(imgKey)) return
-      const imgX = count === 1 ? cx : (width / count) * (idx + 0.5)
-      const imgW = count === 1 ? width : width / count
-      const img = this.add.image(imgX, cy, imgKey)
-        .setScrollFactor(0).setDepth(201)
-        .setDisplaySize(imgW, height)
-        .setAlpha(0)
+      const slotW = width / count
+      const slotX = slotW * (idx + 0.5)
+      const img = this.add.image(slotX, cy, imgKey)
+        .setScrollFactor(0).setDepth(201).setAlpha(0)
+      // Scale to fit slot while keeping aspect ratio (letterbox)
+      const scale = Math.min(slotW / img.width, height / img.height)
+      img.setScale(scale)
       elements.push(img)
       this.tweens.add({ targets: img, alpha: 1, duration: 400, delay: 200 })
     })
 
-    // After 1.5 s, show "press any button" prompt
-    this.time.delayedCall(1500, () => {
+    // After 3 s, show "press any button" prompt at the top
+    this.time.delayedCall(3000, () => {
       if (!this.scene.isActive('GameScene')) return
-      const prompt = this.add.text(cx, height - 50, 'PRESS ANY BUTTON TO CONTINUE', {
+      const prompt = this.add.text(cx, 40, 'PRESS ANY BUTTON TO CONTINUE', {
         fontSize: '10px', fontFamily: FONT, color: '#ffe066',
         stroke: '#000000', strokeThickness: 3,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setAlpha(0)
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(202).setAlpha(0)
       elements.push(prompt)
       this.tweens.add({ targets: prompt, alpha: 1, duration: 300 })
       this.tweens.add({ targets: prompt, alpha: 0.2, duration: 500, yoyo: true, repeat: -1, delay: 300 })
@@ -2360,6 +2365,8 @@ export class GameScene extends Phaser.Scene {
       const dismiss = () => {
         this.input.keyboard?.off('keydown', dismiss)
         this.physics.world.isPaused = false
+        SoundManager.stopCutsceneMusic()
+        SoundManager.startTrack(this.sound, 'music-gameplay')
         elements.forEach(e => { if (e.active) e.destroy() })
         onComplete()
       }
@@ -2372,18 +2379,23 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
 
-    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 0.72)
+    this.cameras.main.setBackgroundColor('#000000')
+    SoundManager.stopTrack()
+    SoundManager.startCutsceneMusic()
+
+    // Fully opaque black — hides the game world completely
+    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 1)
       .setScrollFactor(0).setDepth(90)
 
     const title = this.add.text(cx, cy - 110, 'BOSS DEFEATED!', {
       fontSize: '28px', fontFamily: FONT, color: '#ffe066',
       stroke: '#000000', strokeThickness: 8,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91).setAlpha(0)
 
     const sub = this.add.text(cx, cy - 55, 'What will you do?', {
       fontSize: '11px', fontFamily: FONT, color: '#ffffff',
       stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91).setAlpha(0)
 
     const makeBtn = (x: number, label: string, cb: () => void) => {
       const btn = this.add.text(x, cy + 30, label, {
@@ -2391,22 +2403,20 @@ export class GameScene extends Phaser.Scene {
         stroke: '#000000', strokeThickness: 3,
         backgroundColor: '#00000066', padding: { x: 16, y: 12 },
       }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
-        .setInteractive({ useHandCursor: true })
+        .setInteractive({ useHandCursor: true }).setAlpha(0)
       btn.on('pointerover', () => btn.setColor('#ffe066'))
       btn.on('pointerout',  () => btn.setColor('#ffffff'))
       btn.on('pointerdown', cb)
       return btn
     }
 
-    const allElements = [bg, title, sub]
-
     const btnContinue = makeBtn(cx - 130, 'CONTINUE\nEXPLORING', () => {
-      allElements.forEach(e => e.destroy())
-      btnContinue.destroy()
-      btnMenu.destroy()
+      cleanup()
+      ;[bg, title, sub, btnContinue, btnMenu, cursor].forEach(e => e.destroy())
     })
 
     const btnMenu = makeBtn(cx + 130, 'MAIN MENU', () => {
+      cleanup()
       this.cameras.main.fadeOut(400, 0, 0, 0)
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.registry.set('runRooms',           null)
@@ -2421,7 +2431,41 @@ export class GameScene extends Phaser.Scene {
       })
     })
 
-    this.tweens.add({ targets: [bg, title, sub, btnContinue, btnMenu], alpha: { from: 0, to: 1 }, duration: 400 })
+    // Gamepad cursor
+    const cursor = this.add.text(0, 0, '►', {
+      fontSize: '14px', fontFamily: FONT, color: '#ffe066',
+    }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(92).setVisible(false)
+
+    const items = [
+      { text: btnContinue, action: () => btnContinue.emit('pointerdown') },
+      { text: btnMenu,     action: () => btnMenu.emit('pointerdown') },
+    ]
+    let focusIdx = 0
+
+    const moveFocus = (dir: number) => {
+      focusIdx = (focusIdx + dir + items.length) % items.length
+      const b = items[focusIdx].text.getBounds()
+      cursor.setPosition(b.left - 10, b.centerY).setVisible(true)
+      items.forEach((it, i) => it.text.setColor(i === focusIdx ? '#ffe066' : '#ffffff'))
+    }
+
+    const gpHandler = (_pad: Phaser.Input.Gamepad.Gamepad, button: Phaser.Input.Gamepad.Button) => {
+      if (button.index === 14 || button.index === 12) { moveFocus(-1); return }
+      if (button.index === 15 || button.index === 13) { moveFocus(1);  return }
+      if (button.index === 0  || button.index === 9)  { items[focusIdx]?.action() }
+    }
+
+    const cleanup = () => {
+      this.input.gamepad?.off(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
+      SoundManager.stopCutsceneMusic()
+    }
+    this.input.gamepad?.on(Phaser.Input.Gamepad.Events.BUTTON_DOWN, gpHandler)
+
+    // Fade in content (not the bg — that's instantly black)
+    this.tweens.add({ targets: [title, sub, btnContinue, btnMenu], alpha: 1, duration: 400, delay: 100 })
+
+    // Show cursor on first button after content is visible
+    this.time.delayedCall(550, () => moveFocus(0))
   }
 
   // ── input ─────────────────────────────────────────────────────────────────

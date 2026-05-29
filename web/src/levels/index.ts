@@ -344,7 +344,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   bossDefeatedKey: 'dadDefeated',
   backPortal: { x: 2700, y: 1956 },
   leftExitForward: true,
-  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 300, y: 1948 } },
+  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 400, y: 1948 } },
   bossHp: 20,
   bossName: 'KING ZOMBIE',
   bossKey: 'sheet-king-zombie',
@@ -374,7 +374,7 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   entrySpawns: { right: { x: 5300, y: 608 }, left: { x: 597, y: 672 } },
   bossPortal: { x: 517, y: 672 },
   barrierExit: { x: 5500, y: 608 },
-  backPortalEntryDir: 'left',
+  backPortalEntryDir: 'right',
   platforms: [
     { x: 5300, y: 650, w: 400, h: 20 },   // buffer at right-entry spawn to prevent fall
     { x: 5556, y: 2928, w: 24, h: 5856 }, // right-edge wall prevents falling off world boundary

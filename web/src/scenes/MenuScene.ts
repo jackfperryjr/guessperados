@@ -92,11 +92,14 @@ export class MenuScene extends Phaser.Scene {
   private placeCursor() {
     const item = this.activeItems[this.focusIdx]
     if (!item) return
+    this.activeItems.forEach(it => it.text.setColor(CLR_SELECT))
+    item.text.setColor(CLR_TITLE)
     const b = item.text.getBounds()
     this.gpCursor.setPosition(b.left - 10, b.centerY).setVisible(true)
   }
 
   private setActiveItems(items: MenuItem[]) {
+    this.activeItems.forEach(it => it.text.setColor(CLR_SELECT))
     this.activeItems = items
     this.focusIdx = 0
     this.gpCursor.setVisible(false)
@@ -106,11 +109,9 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale
     const items: Phaser.GameObjects.GameObject[] = []
 
-    const panel = this.add.rectangle(width / 2, height * 0.57, 360, 260, 0x000000, 0.52)
-
-    const btn1P  = this.menuButton(width / 2, height * 0.44, '1  PLAYER')
-    const btn24P = this.menuButton(width / 2, height * 0.57, '2-4  PLAYERS')
-    const btnCt  = this.menuButton(width / 2, height * 0.70, 'CONTROLS')
+    const btn1P  = this.menuButton(width / 2, height * 0.79, '1  PLAYER')
+    const btn24P = this.menuButton(width / 2, height * 0.84, '2-4  PLAYERS')
+    const btnCt  = this.menuButton(width / 2, height * 0.89, 'CONTROLS')
 
     const startGame = () => this.startGame(1)
     const goLobby   = () => {
@@ -127,7 +128,7 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '9px', fontFamily: FONT, color: CLR_DIM,
     }).setOrigin(0.5)
 
-    items.push(panel, btn1P, btn24P, btnCt, tip)
+    items.push(btn1P, btn24P, btnCt, tip)
     this.mainGroup = this.add.container(0, 0, items)
 
     // Store for gamepad navigation (captured as closures above)
@@ -215,7 +216,6 @@ export class MenuScene extends Phaser.Scene {
     const btn = this.add.text(x, y, label, {
       fontSize: '14px', fontFamily: FONT, color: CLR_SELECT,
       stroke: '#000', strokeThickness: 3,
-      backgroundColor: '#00000044', padding: { x: 18, y: 10 },
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
 
     btn.on('pointerover', () => btn.setColor(CLR_TITLE))
