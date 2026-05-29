@@ -25,10 +25,11 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
 
     // Tint by ability drop
     const tints: Record<AbilityType, number> = {
-      [AbilityType.None]:     0x78909c,
-      [AbilityType.Fire]:     0xff6600,
+      [AbilityType.None]:      0x78909c,
+      [AbilityType.Fire]:      0xff6600,
       [AbilityType.Lightning]: 0xffdd00,
-      [AbilityType.Ice]:      0x66ccff,
+      [AbilityType.Ice]:       0x66ccff,
+      [AbilityType.Bat]:       0x78909c,
     }
     this.setTint(tints[abilityDrop])
   }
@@ -43,6 +44,7 @@ export class Destructible extends Phaser.Physics.Arcade.Image {
       const tints: Record<AbilityType, number> = {
         [AbilityType.None]: 0x78909c, [AbilityType.Fire]: 0xff6600,
         [AbilityType.Lightning]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
+        [AbilityType.Bat]: 0x78909c,
       }
       if (this.active) this.setTint(tints[this.abilityDrop])
     })

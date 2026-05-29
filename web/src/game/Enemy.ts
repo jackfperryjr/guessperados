@@ -5,25 +5,27 @@ import { SoundManager } from '../audio/SoundManager'
 const WALK_SPEED = 80
 
 const ATTACK_INTERVAL: Record<AbilityType, number> = {
-  [AbilityType.None]:     0,       // pinklady boss — handled separately
-  [AbilityType.Fire]:     2800,
+  [AbilityType.None]:      0,
+  [AbilityType.Fire]:      2800,
   [AbilityType.Lightning]: 3400,
-  [AbilityType.Ice]:      3000,
+  [AbilityType.Ice]:       3000,
+  [AbilityType.Bat]:       0,
 }
 
 const ENEMY_SHEET: Record<AbilityType, string> = {
-  [AbilityType.None]:     'sheet-enemy-mom',
-  [AbilityType.Fire]:     'sheet-enemy-zombie',
+  [AbilityType.None]:      'sheet-enemy-mom',
+  [AbilityType.Fire]:      'sheet-enemy-zombie',
   [AbilityType.Lightning]: 'sheet-enemy-skeleton',
-  [AbilityType.Ice]:      'sheet-enemy-duck',
+  [AbilityType.Ice]:       'sheet-enemy-duck',
+  [AbilityType.Bat]:       'sheet-enemy-bat',
 }
 
-// Physics body size per enemy type (w, h) — sized for 128px sprites at 0.6 scale (~77px display)
 const ENEMY_BODY: Record<AbilityType, [number, number]> = {
-  [AbilityType.None]:     [44, 50],   // mom — Boss.ts overrides this
-  [AbilityType.Fire]:     [38, 50],   // zombie
-  [AbilityType.Lightning]: [38, 50],   // dad
-  [AbilityType.Ice]:      [40, 34],   // duck (flying, wider than tall)
+  [AbilityType.None]:      [44, 50],
+  [AbilityType.Fire]:      [38, 50],
+  [AbilityType.Lightning]: [38, 50],
+  [AbilityType.Ice]:       [40, 34],
+  [AbilityType.Bat]:       [36, 28],
 }
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
@@ -33,10 +35,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private beingPulled = false
   private readonly animKey: string
   private attackTimer: number
+  private stunTimer = 0
   protected hp = 3
 
   constructor(scene: Phaser.Scene, x: number, y: number, ability: AbilityType) {
-    const isFlying = ability === AbilityType.Ice
+    const isFlying = ability === AbilityType.Ice || ability === AbilityType.Bat
     const sheetKey = ENEMY_SHEET[ability]
     super(scene, x, y, sheetKey)
     this.abilityType = ability
@@ -61,6 +64,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   update() {
     if (this.beingPulled) return
+    if (this.stunTimer > 0) {
+      this.stunTimer -= this.scene.game.loop.delta
+      return
+    }
     const body = this.body as Phaser.Physics.Arcade.Body
 
     if (this.flying) {
@@ -113,8 +120,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     })
   }
 
-  stun(_ms: number) {
-    ;(this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0)
+  stun(ms: number) {
+    this.stunTimer = ms
   }
 
   hit() {

@@ -23,6 +23,9 @@ dev-dist/
 .DS_Store
 Thumbs.db
 
+# Claude
+CLAUDE.md
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

@@ -3,10 +3,11 @@ import { Player } from '../game/Player'
 import { AbilityType } from '../types'
 
 export const ABILITY_COLORS: Record<AbilityType, number> = {
-  [AbilityType.None]:     0x222222,
-  [AbilityType.Fire]:     0xff6600,
+  [AbilityType.None]:      0x222222,
+  [AbilityType.Fire]:      0xff6600,
   [AbilityType.Lightning]: 0xffdd00,
-  [AbilityType.Ice]:      0x66ccff,
+  [AbilityType.Ice]:       0x66ccff,
+  [AbilityType.Bat]:       0x222222,
 }
 
 const ABILITY_ICON_KEYS: Partial<Record<AbilityType, string>> = {
@@ -29,6 +30,9 @@ export class UIManager {
   private emptyAbilityIcons: Phaser.GameObjects.Image[] = []
   private speedBoostIcons: Phaser.GameObjects.Image[] = []
   private strengthBoostIcons: Phaser.GameObjects.Image[] = []
+  private invulnerabilityIcons: Phaser.GameObjects.Image[] = []
+  private wormCountText: Phaser.GameObjects.Text | null = null
+  private rolyPolyCountText: Phaser.GameObjects.Text | null = null
 
   constructor(
     scene: Phaser.Scene,
@@ -36,6 +40,7 @@ export class UIManager {
     _worldName = '',
     isBossRoom = false,
     bossMaxHp = 0,
+    bossName = 'BOSS',
   ) {
     this.scene = scene
     const { width } = scene.scale
@@ -43,7 +48,7 @@ export class UIManager {
     if (isBossRoom && bossMaxHp > 0) {
       const bx = width - 110
       const by = 22
-      const bossLabel = scene.add.text(bx, by - 10, 'BOSS', {
+      const bossLabel = scene.add.text(bx, by - 10, bossName, {
         fontSize: '8px', fontFamily: FONT, color: '#ff4444',
       }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20)
 
@@ -105,19 +110,46 @@ export class UIManager {
         .setScale(0.1).setAlpha(0).setScrollFactor(0).setDepth(22)
 
       // Speed boost slot
-      const speedIcon = scene.add.image(ABX + 40, rowY, 'speed_boost_icon')
-        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+      const speedIcon = scene.add.image(ABX + 28, rowY, 'speed_boost_icon')
+        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
 
       // Strength boost slot
-      const strengthIcon = scene.add.image(ABX + 80, rowY, 'strength_boost_icon')
-        .setDisplaySize(40, 40).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+      const strengthIcon = scene.add.image(ABX + 58, rowY, 'strength_boost_icon')
+        .setDisplaySize(28, 28).setAlpha(0.25).setScrollFactor(0).setDepth(21)
+
+      // Invulnerability slot
+      const invulnIcon = scene.add.image(ABX + 88, rowY, 'invulnerability_icon')
+        .setDisplaySize(20, 20).setAlpha(0.25).setScrollFactor(0).setDepth(21)
 
       this.emptyAbilityIcons.push(emptyAbilityIcon)
       this.abilityIcons.push(abilityIcon)
       this.speedBoostIcons.push(speedIcon)
       this.strengthBoostIcons.push(strengthIcon)
+      this.invulnerabilityIcons.push(invulnIcon)
       this.ammoPips.push([])
     }
+
+    // Worm + roly-poly counters — horizontally aligned just right of the black HUD strip (ends at x=320)
+    const CTR_Y   = 22   // same row as the top player HUD entry
+    const WORM_IX = 334  // worm icon center
+    const ROLY_IX = 394  // roly-poly icon center (28px icon + 10px gap + label width ≈ 60px apart)
+    if (scene.textures.exists('item-worm')) {
+      scene.add.image(WORM_IX, CTR_Y, 'item-worm')
+        .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
+    }
+    this.wormCountText = scene.add.text(WORM_IX + 17, CTR_Y, '0', {
+      fontSize: '10px', fontFamily: FONT, color: '#aaffaa',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(20)
+
+    if (scene.textures.exists('item-roly-poly')) {
+      scene.add.image(ROLY_IX, CTR_Y, 'item-roly-poly')
+        .setDisplaySize(28, 28).setScrollFactor(0).setDepth(20)
+    }
+    this.rolyPolyCountText = scene.add.text(ROLY_IX + 17, CTR_Y, '0', {
+      fontSize: '10px', fontFamily: FONT, color: '#ffddaa',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(20)
   }
 
   initAbilityPips(playerIdx: number, maxAmmo: number) {
@@ -149,22 +181,24 @@ export class UIManager {
   update(players: Player[]) {
     players.forEach((p, i) => {
       this.heartIcons[i]?.forEach((icon, h) => icon.setAlpha(h < p.hearts ? 1 : 0.2))
-      const ability = p.currentAbility
-      const icon = this.abilityIcons[i]
-      const emptyIcon = this.emptyAbilityIcons[i]
-      if (icon) {
-        const key = ABILITY_ICON_KEYS[ability]
-        if (key) {
-          icon.setTexture(key).setScale(0.1).setAlpha(1)
-          emptyIcon?.setAlpha(0)
-        } else {
-          icon.setAlpha(0)
-          emptyIcon?.setAlpha(0.25)
-        }
-      }
       this.speedBoostIcons[i]?.setAlpha(p.speedBoostActive ? 1 : 0.25)
       this.strengthBoostIcons[i]?.setAlpha(p.strengthBoostActive ? 1 : 0.25)
+      this.invulnerabilityIcons[i]?.setAlpha(p.invulnerabilityActive ? 1 : 0.25)
     })
+  }
+
+  updateAbilityIcon(playerIdx: number, ability: AbilityType) {
+    const icon = this.abilityIcons[playerIdx]
+    const emptyIcon = this.emptyAbilityIcons[playerIdx]
+    if (!icon) return
+    const key = ABILITY_ICON_KEYS[ability]
+    if (key) {
+      icon.setTexture(key).setScale(0.1).setAlpha(1)
+      emptyIcon?.setAlpha(0)
+    } else {
+      icon.setAlpha(0)
+      emptyIcon?.setAlpha(0.25)
+    }
   }
 
   updateBossBar(current: number, max: number) {
@@ -172,6 +206,9 @@ export class UIManager {
     const pct = max > 0 ? Math.max(0, current / max) : 0
     this.bossBarFill.width = Math.round(200 * pct)
   }
+
+  updateWormCount(n: number) { this.wormCountText?.setText(`${n}`) }
+  updateRolyPolyCount(n: number) { this.rolyPolyCountText?.setText(`${n}`) }
 
   hideBossBar() {
     if (!this.bossHudObjects.length) return

@@ -3,7 +3,7 @@ import { AbilityType, DamageType } from '../types'
 import { BootScene } from '../scenes/BootScene'
 import { SoundManager } from '../audio/SoundManager'
 
-const MOVE_SPEED        = 220
+const MOVE_SPEED        = 350
 const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
 const INHALE_RANGE      = 190
@@ -13,10 +13,11 @@ const SPIT_VX           = 540
 const SPIT_VY           = -320
 
 export const ABILITY_AMMO: Record<AbilityType, number> = {
-  [AbilityType.None]:     0,
-  [AbilityType.Fire]:     10,
+  [AbilityType.None]:      0,
+  [AbilityType.Fire]:      10,
   [AbilityType.Lightning]: 3,
-  [AbilityType.Ice]:      10,
+  [AbilityType.Ice]:       10,
+  [AbilityType.Bat]:       0,
 }
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -29,8 +30,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   isInhaled     = false
   speedMultiplier  = 1.0
   controlsReversed = false
-  speedBoostActive    = false
-  strengthBoostActive = false
+  speedBoostActive       = false
+  strengthBoostActive    = false
+  invulnerabilityActive  = false
 
   private hitCount        = 0
   private isFloating      = false
@@ -40,6 +42,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private isUsingAbility  = false
   private inhaledObject: Phaser.Physics.Arcade.Sprite | null = null
   private animPrefix: string | null = null
+  private rainbowTimer: Phaser.Time.TimerEvent | null = null
 
   constructor(scene: Phaser.Scene, x: number, y: number, id: number) {
     const selectedChars: string[] | undefined = scene.registry.get('selectedChars')
@@ -64,12 +67,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
-    this.setScale(1.15)  // 64px frame → ~74px display
+    this.setScale(1.3)  // 64px frame → ~110px display
 
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(false)
-    body.setSize(28, 40, false)
-    body.setOffset(18, 20)
+    body.setSize(42, 60, false)
+    body.setOffset(18, 0)
 
   }
 
@@ -100,7 +103,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   jumpReleased() { this.isFloating = false }
 
   applySpeedBoost(permanent: boolean) {
-    this.speedMultiplier = 5.0
+    this.speedMultiplier = 3.0
     this.speedBoostActive = true
     if (!permanent) {
       this.scene.time.delayedCall(30000, () => {
@@ -114,6 +117,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (!permanent) {
       this.scene.time.delayedCall(30000, () => {
         if (this.active) this.strengthBoostActive = false
+      })
+    }
+  }
+
+  applyInvulnerability(permanent: boolean) {
+    this.invulnerabilityActive = true
+    this.rainbowTimer?.remove()
+    let hueIdx = 0
+    const rainbow = [0xff6666, 0xff9955, 0xffff55, 0x55ff88, 0x55aaff, 0xcc55ff]
+    this.rainbowTimer = this.scene.time.addEvent({
+      delay: 80, loop: true,
+      callback: () => {
+        if (!this.active) { this.rainbowTimer?.remove(); this.rainbowTimer = null; return }
+        this.setTint(rainbow[hueIdx % rainbow.length])
+        hueIdx++
+      },
+    })
+    if (!permanent) {
+      this.scene.time.delayedCall(30000, () => {
+        if (this.active) {
+          this.invulnerabilityActive = false
+          this.rainbowTimer?.remove()
+          this.rainbowTimer = null
+          this.clearTint()
+          this.setAlpha(1)
+        }
       })
     }
   }
@@ -256,7 +285,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // ── damage ──────────────────────────────────────────────────────────────────
 
   hitByEnemy() {
-    if (this.invincible || !this.isAlive) return
+    if (this.invincible || this.invulnerabilityActive || !this.isAlive) return
     SoundManager.playerHit()
 
     this.hitCount++
@@ -293,6 +322,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   die() {
     if (this.inhaledObject) this.spitObject()
+    this.rainbowTimer?.remove()
+    this.rainbowTimer = null
     SoundManager.playerDeath()
     this.isAlive = false
     this.setAlpha(0.3)

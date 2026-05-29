@@ -17,7 +17,7 @@ export class VictoryScene extends Phaser.Scene {
     const { width, height } = this.scale
     const cx = width / 2, cy = height / 2
 
-    this.cameras.main.setBackgroundColor('#010118')
+    this.cameras.main.setBackgroundColor('#000000')
     this.cameras.main.fadeIn(700, 0, 0, 0)
 
     this.gpCursor = this.add.text(0, 0, '►', {
@@ -27,6 +27,7 @@ export class VictoryScene extends Phaser.Scene {
     this.spawnStars(width, height)
     this.buildUI(cx, cy)
 
+    SoundManager.stopTrack()
     SoundManager.startVictoryMusic()
     this.events.once('shutdown', () => SoundManager.stopVictoryMusic())
   }

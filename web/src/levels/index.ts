@@ -12,7 +12,7 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost'
+export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
@@ -22,8 +22,21 @@ export interface ItemSpawn {
 export interface FurnitureSpawn {
   type: 'bookcase' | 'table' | 'chest'
   x: number
+  y?: number          // explicit world Y for the furniture center; overrides floor scan
   ability?: AbilityType
-  scanFromY?: number  // world Y to start scanning downward; defaults to 0
+  scanFromY?: number  // world Y to start scanning downward; only used when y is absent
+}
+
+export interface SpikeFloorSpawn {
+  x: number; y: number
+  xEnd?: number       // fill spikes from x to xEnd
+  variant?: 1 | 2    // spike_floor1 or spike_floor2 (defaults to 1)
+  scale?: number      // display scale multiplier (step = scale * 32, defaults to 1)
+}
+
+export interface SpikeBallSpawn {
+  x: number; y: number
+  count?: number      // number of balls to spawn at this position (default 1)
 }
 
 export interface RoomConfig {
@@ -34,12 +47,17 @@ export interface RoomConfig {
   bgMid: string
   exits: ExitDir[]
   exitPositions?: Partial<Record<ExitDir, number>>
+  barrierExit?: { x: number; y: number }
+  barrierVisual?: { x: number; y: number; w: number; h: number }
   isTutorial?: boolean
   isThrone?: boolean
   isBossRoom?: boolean
   bossHp?: number
+  bossName?: string
   bossKey?: string
   bossFlying?: boolean
+  bossStationary?: boolean    // boss stays in place, no patrol movement
+  bossAttackRate?: number     // ms between boss attacks (default 3000)
   bossSpawnX?: number
   bossSpawnY?: number
   bossPortal?: { x: number; y: number }
@@ -47,6 +65,10 @@ export interface RoomConfig {
   leftExitForward?: boolean   // left exit advances runIndex instead of going back
   rightExitBack?: boolean     // right exit goes back (decrements runIndex) instead of forward
   backPortal?: { x: number; y: number }  // non-glowing boss door for returning to previous room
+  backPortalKey?: string                  // registry key to check instead of bossDefeatedKey
+  backPortalEntryDir?: ExitDir            // which direction to enter the previous room from
+  bossRightBarrierX?: number              // override x for the right-exit barrier (default: worldWidth - 150)
+  bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
   spawnX?: number            // override default left-entry X for continuous world rooms
   starOrbSide?: 'left' | 'right'  // which corner the star-burst orb appears in
@@ -54,11 +76,14 @@ export interface RoomConfig {
   roomImage?: string
   worldHeight?: number
   worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
+  comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
   platforms: Platform[]
   slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
   destructibles: DestructibleSpawn[]
   furnitureSpawns?: FurnitureSpawn[]
+  spikeFloors?: SpikeFloorSpawn[]
+  spikeBalls?: SpikeBallSpawn[]
   crates: CrateSpawn[]
   items: ItemSpawn[]
 }
@@ -83,147 +108,106 @@ const WORLD_ROOM: RoomConfig = {
   worldMap: { ...MAP },
   exits: [],
   platforms: [],
-  // Portal door sits on the wide floating platform in the far bottom-right room (y=2688)
   bossPortal: { x: 4746, y: 3104 },
   enemies: [
-    // Zombies (Fire) — ground patrol — no top-left room (x < 1600)
-    { x: 1700, y: 620, ability: AbilityType.Fire     },
-    { x: 2100, y: 620, ability: AbilityType.Fire     },
-    { x: 2500, y: 620, ability: AbilityType.Fire     },
-    { x: 2900, y: 620, ability: AbilityType.Fire     },
-    { x: 3400, y: 620, ability: AbilityType.Fire     },
-    { x: 3900, y: 620, ability: AbilityType.Fire     },
-    { x: 4400, y: 620, ability: AbilityType.Fire     },
-    { x: 4800, y: 620, ability: AbilityType.Fire     },
-    // Skeletons (Lightning) — ground patrol
-    { x: 1900, y: 620, ability: AbilityType.Lightning },
-    { x: 2300, y: 620, ability: AbilityType.Lightning },
-    { x: 2700, y: 620, ability: AbilityType.Lightning },
-    { x: 3200, y: 620, ability: AbilityType.Lightning },
-    { x: 3700, y: 620, ability: AbilityType.Lightning },
-    { x: 4200, y: 620, ability: AbilityType.Lightning },
-    { x: 4600, y: 620, ability: AbilityType.Lightning },
-    // Ducks (Ice) — floating
-    { x: 1800, y: 420, ability: AbilityType.Ice      },
-    { x: 2200, y: 420, ability: AbilityType.Ice      },
-    { x: 2600, y: 420, ability: AbilityType.Ice      },
-    { x: 3000, y: 420, ability: AbilityType.Ice      },
-    { x: 3500, y: 420, ability: AbilityType.Ice      },
-    { x: 4000, y: 420, ability: AbilityType.Ice      },
-    { x: 4500, y: 420, ability: AbilityType.Ice      },
+    // Skeletons
+    { x:  367, y: 1280, ability: AbilityType.Lightning },
+    { x:  906, y: 1280, ability: AbilityType.Lightning },
+    // Bats
+    { x: 1863, y:  768, ability: AbilityType.Bat },
+    { x: 1716, y:  150, ability: AbilityType.Bat },
+    // Zombies
+    { x: 2100, y: 1582, ability: AbilityType.Fire },
+    { x:  359, y: 1696, ability: AbilityType.Fire },
+    { x:  423, y: 1696, ability: AbilityType.Fire },
+    // 5 skeletons
+    { x: 1036, y: 2368, ability: AbilityType.Lightning },
+    { x: 1100, y: 2368, ability: AbilityType.Lightning },
+    { x: 1164, y: 2368, ability: AbilityType.Lightning },
+    { x: 1228, y: 2368, ability: AbilityType.Lightning },
+    { x: 1292, y: 2368, ability: AbilityType.Lightning },
+    // 3 skeletons
+    { x: 2968, y:  640, ability: AbilityType.Lightning },
+    { x: 3032, y:  640, ability: AbilityType.Lightning },
+    { x: 3096, y:  640, ability: AbilityType.Lightning },
+    // 2 bats
+    { x: 4581, y:  224, ability: AbilityType.Bat },
+    { x: 4645, y:  224, ability: AbilityType.Bat },
+    // 2 zombies
+    { x: 4582, y:  672, ability: AbilityType.Fire },
+    { x: 4646, y:  672, ability: AbilityType.Fire },
+    // 2 bats
+    { x: 4544, y:  896, ability: AbilityType.Bat },
+    { x: 4608, y:  896, ability: AbilityType.Bat },
+    // 2 skeletons
+    { x: 2742, y: 1664, ability: AbilityType.Lightning },
+    { x: 2806, y: 1664, ability: AbilityType.Lightning },
+    // 2 zombies
+    { x: 3685, y: 1152, ability: AbilityType.Fire },
+    { x: 3749, y: 1152, ability: AbilityType.Fire },
+    // Zombie
+    { x: 5105, y: 1760, ability: AbilityType.Fire },
+    // 2 zombies
+    { x: 5065, y: 2209, ability: AbilityType.Fire },
+    { x: 5129, y: 2209, ability: AbilityType.Fire },
+    // Skeleton
+    { x: 3688, y: 1440, ability: AbilityType.Lightning },
+    // Zombie
+    { x: 3669, y: 1664, ability: AbilityType.Fire },
+    // 2 bats
+    { x: 2791, y: 2031, ability: AbilityType.Bat },
+    { x: 2855, y: 2031, ability: AbilityType.Bat },
   ],
   destructibles: [],
   furnitureSpawns: [
-    // Dense coverage across x≈1640–5280, one item every ~40 px, scanFromY=580
-    // ── Bookcases (every 120 px, ability every ~600 px) ──
-    { type: 'bookcase', x: 1640, scanFromY: 580 },
-    { type: 'bookcase', x: 1760, scanFromY: 580 },
-    { type: 'bookcase', x: 1880, scanFromY: 580 },
-    { type: 'bookcase', x: 2000, scanFromY: 580 },
-    { type: 'bookcase', x: 2120, scanFromY: 580 },
-    { type: 'bookcase', x: 2240, scanFromY: 580, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 2360, scanFromY: 580 },
-    { type: 'bookcase', x: 2480, scanFromY: 580 },
-    { type: 'bookcase', x: 2600, scanFromY: 580 },
-    { type: 'bookcase', x: 2720, scanFromY: 580 },
-    { type: 'bookcase', x: 2840, scanFromY: 580, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 2960, scanFromY: 580 },
-    { type: 'bookcase', x: 3080, scanFromY: 580 },
-    { type: 'bookcase', x: 3200, scanFromY: 580 },
-    { type: 'bookcase', x: 3320, scanFromY: 580, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 3440, scanFromY: 580 },
-    { type: 'bookcase', x: 3560, scanFromY: 580 },
-    { type: 'bookcase', x: 3680, scanFromY: 580 },
-    { type: 'bookcase', x: 3800, scanFromY: 580, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 3920, scanFromY: 580 },
-    { type: 'bookcase', x: 4040, scanFromY: 580 },
-    { type: 'bookcase', x: 4160, scanFromY: 580 },
-    { type: 'bookcase', x: 4280, scanFromY: 580, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 4400, scanFromY: 580 },
-    { type: 'bookcase', x: 4520, scanFromY: 580 },
-    { type: 'bookcase', x: 4640, scanFromY: 580 },
-    { type: 'bookcase', x: 4760, scanFromY: 580, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 4880, scanFromY: 580 },
-    { type: 'bookcase', x: 5000, scanFromY: 580 },
-    { type: 'bookcase', x: 5120, scanFromY: 580 },
-    { type: 'bookcase', x: 5240, scanFromY: 580 },
-    // ── Tables (every 120 px, offset +40 from bookcases) ──
-    { type: 'table', x: 1680, scanFromY: 580 },
-    { type: 'table', x: 1800, scanFromY: 580 },
-    { type: 'table', x: 1920, scanFromY: 580 },
-    { type: 'table', x: 2040, scanFromY: 580 },
-    { type: 'table', x: 2160, scanFromY: 580 },
-    { type: 'table', x: 2280, scanFromY: 580 },
-    { type: 'table', x: 2400, scanFromY: 580 },
-    { type: 'table', x: 2520, scanFromY: 580 },
-    { type: 'table', x: 2640, scanFromY: 580 },
-    { type: 'table', x: 2760, scanFromY: 580 },
-    { type: 'table', x: 2880, scanFromY: 580 },
-    { type: 'table', x: 3000, scanFromY: 580 },
-    { type: 'table', x: 3120, scanFromY: 580 },
-    { type: 'table', x: 3240, scanFromY: 580 },
-    { type: 'table', x: 3360, scanFromY: 580 },
-    { type: 'table', x: 3480, scanFromY: 580 },
-    { type: 'table', x: 3600, scanFromY: 580 },
-    { type: 'table', x: 3720, scanFromY: 580 },
-    { type: 'table', x: 3840, scanFromY: 580 },
-    { type: 'table', x: 3960, scanFromY: 580 },
-    { type: 'table', x: 4080, scanFromY: 580 },
-    { type: 'table', x: 4200, scanFromY: 580 },
-    { type: 'table', x: 4320, scanFromY: 580 },
-    { type: 'table', x: 4440, scanFromY: 580 },
-    { type: 'table', x: 4560, scanFromY: 580 },
-    { type: 'table', x: 4680, scanFromY: 580 },
-    { type: 'table', x: 4800, scanFromY: 580 },
-    { type: 'table', x: 4920, scanFromY: 580 },
-    { type: 'table', x: 5040, scanFromY: 580 },
-    { type: 'table', x: 5160, scanFromY: 580 },
-    { type: 'table', x: 5280, scanFromY: 580 },
-    // ── Chests (every 120 px, offset +80 from bookcases, with scattered abilities) ──
-    { type: 'chest', x: 1720, scanFromY: 580 },
-    { type: 'chest', x: 1840, scanFromY: 580, ability: AbilityType.Fire     },
-    { type: 'chest', x: 1960, scanFromY: 580 },
-    { type: 'chest', x: 2080, scanFromY: 580 },
-    { type: 'chest', x: 2200, scanFromY: 580, ability: AbilityType.Fire     },
-    { type: 'chest', x: 2320, scanFromY: 580 },
-    { type: 'chest', x: 2440, scanFromY: 580 },
-    { type: 'chest', x: 2560, scanFromY: 580, ability: AbilityType.Lightning },
-    { type: 'chest', x: 2680, scanFromY: 580 },
-    { type: 'chest', x: 2800, scanFromY: 580 },
-    { type: 'chest', x: 2920, scanFromY: 580, ability: AbilityType.Lightning },
-    { type: 'chest', x: 3040, scanFromY: 580 },
-    { type: 'chest', x: 3160, scanFromY: 580 },
-    { type: 'chest', x: 3280, scanFromY: 580, ability: AbilityType.Lightning },
-    { type: 'chest', x: 3400, scanFromY: 580 },
-    { type: 'chest', x: 3520, scanFromY: 580 },
-    { type: 'chest', x: 3640, scanFromY: 580, ability: AbilityType.Ice      },
-    { type: 'chest', x: 3760, scanFromY: 580 },
-    { type: 'chest', x: 3880, scanFromY: 580 },
-    { type: 'chest', x: 4000, scanFromY: 580, ability: AbilityType.Ice      },
-    { type: 'chest', x: 4120, scanFromY: 580 },
-    { type: 'chest', x: 4240, scanFromY: 580 },
-    { type: 'chest', x: 4360, scanFromY: 580, ability: AbilityType.Ice      },
-    { type: 'chest', x: 4480, scanFromY: 580 },
-    { type: 'chest', x: 4600, scanFromY: 580 },
-    { type: 'chest', x: 4720, scanFromY: 580, ability: AbilityType.Fire     },
-    { type: 'chest', x: 4840, scanFromY: 580 },
-    { type: 'chest', x: 4960, scanFromY: 580 },
-    { type: 'chest', x: 5080, scanFromY: 580 },
-    { type: 'chest', x: 5200, scanFromY: 580 },
-    { type: 'chest', x: 5320, scanFromY: 580 },
+    // tables and chests shifted +5 y to sit on floor; floating table at x=2742 removed
+    { type: 'table',    x:  336, y: 1290 },
+    { type: 'bookcase', x:  392, y: 1280 },
+    { type: 'bookcase', x: 1566, y: 1696 },
+    { type: 'bookcase', x: 1720, y: 2364 },
+    { type: 'bookcase', x: 1731, y: 1696 },
+    { type: 'table',    x:  534, y: 1706 },
+    { type: 'table',    x:  919, y: 2378 },
+    { type: 'chest',    x: 2019, y: 2474, ability: AbilityType.Fire },
+    { type: 'table',    x: 3064, y:  362 },
+    { type: 'bookcase', x: 3120, y:  352 },
+    { type: 'chest',    x: 2407, y:  650 },
+    { type: 'table',    x: 2884, y:  650 },
+    { type: 'bookcase', x: 3408, y:  640 },
+    { type: 'bookcase', x: 5238, y:  224 },
+    { type: 'table',    x: 3885, y:  682 },
+    { type: 'bookcase', x: 3941, y:  672 },
+    { type: 'table',    x: 3995, y:  682 },
+    { type: 'bookcase', x: 4893, y:  896 },
+    { type: 'table',    x: 4949, y:  906 },
+    { type: 'table',    x: 2658, y:  906 },
+    { type: 'bookcase', x: 2842, y: 1152 },
+    { type: 'table',    x: 4552, y: 2539 },
+    { type: 'bookcase', x: 4608, y: 2524 },
+    { type: 'bookcase', x: 3541, y: 1440 },
+    { type: 'bookcase', x: 3834, y: 1440 },
+    { type: 'bookcase', x: 3540, y: 1664 },
+    { type: 'bookcase', x: 3851, y: 1664 },
+    { type: 'table',    x: 3724, y: 2538 },
+    { type: 'chest',    x: 3376, y: 2538 },
+    { type: 'bookcase', x: 2912, y: 3200 },
+  ],
+  spikeFloors: [
+    { x: 2305, y: 3205, xEnd: 2721, scale: 2 },
+    { x: 163,  y: 2625, xEnd: 685,  scale: 2 },
   ],
   crates: [
     { x: 1800, y: 580 }, { x: 2500, y: 580 },
     { x: 3300, y: 580 }, { x: 4100, y: 580 },
   ],
   items: [
-    { x: 148,  y: 502, type: 'speed' },        // hidden permanent speed boost
-    { x: 1456, y: 502, type: 'attack-boost' }, // hidden permanent strength boost
-    { x: 1800, y: 560, type: 'heart' },
-    { x: 2400, y: 560, type: 'ability', ability: AbilityType.Fire     },
-    { x: 3100, y: 560, type: 'ability', ability: AbilityType.Lightning },
-    { x: 3800, y: 560, type: 'ability', ability: AbilityType.Ice      },
-    { x: 4500, y: 560, type: 'heart' },
+    { x:  148, y:  502, type: 'speed' },
+    { x: 1456, y:  502, type: 'attack-boost' },
+    { x:  176, y: 1870, type: 'speed' },
+    { x:  780, y:  426, type: 'invulnerability' },
+    { x: 1778, y: 2460, type: 'worm' },
+    { x:  369, y: 1948, type: 'worm' },
+    { x: 3196, y: 1660, type: 'worm' },
   ],
 }
 
@@ -241,23 +225,24 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   exitPositions: { left: 1280, right: 1280 },
   isBossRoom: true,
   bossDefeatedKey: 'dragonDefeated',
-  backPortal: { x: 84, y: 1280 },
+  backPortal: { x: 562, y: 1280 },
   bossHp: 15,
-  bossSpawnX: 800,
-  bossSpawnY: 900,   // flying boss, starts mid-room
+  bossName: 'KING SKELETON',
+  bossKey: 'sheet-king-skeleton',
+  bossFlying: false,
+  bossSpawnX: 1331,
+  bossSpawnY: 1213,
+  bossRightBarrierX: 1497,
+  bossRightBarrierY: 1276,
   platforms: [
     { x: 800,  y: 1584, w: 1600, h: 32 },  // bottom seal
   ],
   enemies: [],
   destructibles: [],
   furnitureSpawns: [
-    // Floor surface at y=1312 (row 41). Scan from y=1280 (open air just above it).
-    { type: 'bookcase', x: 200,  scanFromY: 1280 },
-    { type: 'bookcase', x: 1400, scanFromY: 1280 },
-    { type: 'table',    x: 350,  scanFromY: 1280 },
-    { type: 'table',    x: 1250, scanFromY: 1280 },
-    { type: 'chest',    x: 500,  scanFromY: 1280, ability: AbilityType.Fire },
-    { type: 'chest',    x: 1100, scanFromY: 1280, ability: AbilityType.Ice  },
+    { type: 'bookcase', x: 200, scanFromY: 1280 },
+    { type: 'table',    x: 350, scanFromY: 1280 },
+    { type: 'chest',    x: 500, scanFromY: 1280, ability: AbilityType.Fire },
   ],
   crates: [],
   items: [
@@ -279,128 +264,68 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   worldMap: { ...MAP_TWO },
   exits: [],
   exitPositions: { left: 3584 },
-  spawnX: 314,              // spawn at floor level, clear of the left-edge exit
+  spawnX: 314,
   bossPortal: { x: 774, y: 736 },
   platforms: [],
   enemies: [
-    // Bottom-left area — near player spawn
-    { x:  400, y: 3100, ability: AbilityType.Fire     },
-    { x:  600, y: 3100, ability: AbilityType.Lightning },
-    { x:  900, y: 3100, ability: AbilityType.Ice      },
-    { x: 1200, y: 3100, ability: AbilityType.Fire     },
-    { x: 1500, y: 3100, ability: AbilityType.Lightning },
-    // Mid-left vertical corridor enemies
-    { x:  350, y: 2400, ability: AbilityType.Ice      },
-    { x:  650, y: 2400, ability: AbilityType.Fire     },
-    { x:  400, y: 1800, ability: AbilityType.Lightning },
-    { x:  700, y: 1800, ability: AbilityType.Ice      },
-    { x:  500, y: 1200, ability: AbilityType.Fire     },
-    // Mid-map ground floor
-    { x: 1800, y: 3100, ability: AbilityType.Fire     },
-    { x: 2200, y: 3100, ability: AbilityType.Lightning },
-    { x: 2600, y: 3100, ability: AbilityType.Ice      },
-    { x: 3000, y: 3100, ability: AbilityType.Fire     },
-    { x: 3400, y: 3100, ability: AbilityType.Lightning },
-    { x: 3800, y: 3100, ability: AbilityType.Ice      },
-    { x: 4200, y: 3100, ability: AbilityType.Fire     },
-    { x: 4600, y: 3100, ability: AbilityType.Lightning },
-    { x: 5000, y: 3100, ability: AbilityType.Ice      },
-    // Flying ducks — scattered heights
-    { x:  800, y: 2800, ability: AbilityType.Ice      },
-    { x: 1400, y: 2600, ability: AbilityType.Ice      },
-    { x: 2000, y: 2800, ability: AbilityType.Ice      },
-    { x: 2800, y: 2600, ability: AbilityType.Ice      },
-    { x: 3600, y: 2800, ability: AbilityType.Ice      },
-    { x: 4400, y: 2600, ability: AbilityType.Ice      },
-    // Upper level enemies (near boss portal area)
-    { x:  600, y:  900, ability: AbilityType.Lightning },
-    { x:  900, y:  900, ability: AbilityType.Fire     },
-    { x: 1100, y:  900, ability: AbilityType.Lightning },
-    // Mid-right platform (floor surface at y=1376)
-    { x: 4080, y: 1340, ability: AbilityType.Lightning },
+    // Bottom floor
+    { x: 1521, y: 3324, ability: AbilityType.Fire },
+    { x: 3122, y: 3500, ability: AbilityType.Fire },
+    { x: 3178, y: 3500, ability: AbilityType.Fire },
+    { x: 3503, y: 3500, ability: AbilityType.Lightning },
+    { x: 5116, y: 3500, ability: AbilityType.Fire },
+    { x: 5172, y: 3500, ability: AbilityType.Fire },
+    { x: 5228, y: 3500, ability: AbilityType.Fire },
+    { x: 4003, y: 3004, ability: AbilityType.Fire },
+    { x: 4059, y: 3004, ability: AbilityType.Fire },
+    // Bats — mid level
+    { x: 3203, y: 2832, ability: AbilityType.Bat },
+    { x: 3259, y: 2832, ability: AbilityType.Bat },
+    { x: 3315, y: 2832, ability: AbilityType.Bat },
+    // Upper level
+    { x: 3676, y:  508, ability: AbilityType.Fire },
+    { x: 3732, y:  508, ability: AbilityType.Fire },
+    { x: 3788, y:  508, ability: AbilityType.Fire },
+    { x: 4988, y:  860, ability: AbilityType.Bat },
+    { x: 5044, y:  860, ability: AbilityType.Bat },
+    { x: 5100, y:  860, ability: AbilityType.Bat },
   ],
   destructibles: [],
   furnitureSpawns: [
-    // Bottom floor swath x≈300–5300, scanFromY=3050
-    { type: 'bookcase', x:  360, scanFromY: 3050 },
-    { type: 'bookcase', x:  480, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x:  600, scanFromY: 3050 },
-    { type: 'bookcase', x:  720, scanFromY: 3050 },
-    { type: 'bookcase', x:  840, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x:  960, scanFromY: 3050 },
-    { type: 'bookcase', x: 1080, scanFromY: 3050 },
-    { type: 'bookcase', x: 1200, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 1440, scanFromY: 3050 },
-    { type: 'bookcase', x: 1680, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 1920, scanFromY: 3050 },
-    { type: 'bookcase', x: 2160, scanFromY: 3050 },
-    { type: 'bookcase', x: 2400, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 2640, scanFromY: 3050 },
-    { type: 'bookcase', x: 2880, scanFromY: 3050 },
-    { type: 'bookcase', x: 3120, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 3360, scanFromY: 3050 },
-    { type: 'bookcase', x: 3600, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'bookcase', x: 3840, scanFromY: 3050 },
-    { type: 'bookcase', x: 4080, scanFromY: 3050 },
-    { type: 'bookcase', x: 4320, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'bookcase', x: 4560, scanFromY: 3050 },
-    { type: 'bookcase', x: 4800, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'bookcase', x: 5040, scanFromY: 3050 },
-    { type: 'bookcase', x: 5280, scanFromY: 3050 },
-    { type: 'table', x:  400, scanFromY: 3050 },
-    { type: 'table', x:  640, scanFromY: 3050 },
-    { type: 'table', x:  880, scanFromY: 3050 },
-    { type: 'table', x: 1120, scanFromY: 3050 },
-    { type: 'table', x: 1360, scanFromY: 3050 },
-    { type: 'table', x: 1600, scanFromY: 3050 },
-    { type: 'table', x: 1840, scanFromY: 3050 },
-    { type: 'table', x: 2080, scanFromY: 3050 },
-    { type: 'table', x: 2320, scanFromY: 3050 },
-    { type: 'table', x: 2560, scanFromY: 3050 },
-    { type: 'table', x: 2800, scanFromY: 3050 },
-    { type: 'table', x: 3040, scanFromY: 3050 },
-    { type: 'table', x: 3280, scanFromY: 3050 },
-    { type: 'table', x: 3520, scanFromY: 3050 },
-    { type: 'table', x: 3760, scanFromY: 3050 },
-    { type: 'table', x: 4000, scanFromY: 3050 },
-    { type: 'table', x: 4240, scanFromY: 3050 },
-    { type: 'table', x: 4480, scanFromY: 3050 },
-    { type: 'table', x: 4720, scanFromY: 3050 },
-    { type: 'table', x: 4960, scanFromY: 3050 },
-    { type: 'table', x: 5200, scanFromY: 3050 },
-    { type: 'chest', x:  440, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x:  680, scanFromY: 3050 },
-    { type: 'chest', x:  920, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 1160, scanFromY: 3050 },
-    { type: 'chest', x: 1400, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 1760, scanFromY: 3050 },
-    { type: 'chest', x: 2000, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 2240, scanFromY: 3050 },
-    { type: 'chest', x: 2480, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 2720, scanFromY: 3050 },
-    { type: 'chest', x: 2960, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 3200, scanFromY: 3050 },
-    { type: 'chest', x: 3440, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 3680, scanFromY: 3050 },
-    { type: 'chest', x: 3920, scanFromY: 3050, ability: AbilityType.Lightning },
-    { type: 'chest', x: 4160, scanFromY: 3050 },
-    { type: 'chest', x: 4400, scanFromY: 3050, ability: AbilityType.Ice      },
-    { type: 'chest', x: 4640, scanFromY: 3050 },
-    { type: 'chest', x: 4880, scanFromY: 3050, ability: AbilityType.Fire     },
-    { type: 'chest', x: 5120, scanFromY: 3050 },
-    { type: 'chest', x: 5360, scanFromY: 3050 },
+    // Bottom floor
+    { type: 'table',    x:  488, y: 3369 },
+    { type: 'bookcase', x:  544, y: 3356 },
+    { type: 'bookcase', x: 1229, y: 3324 },
+    { type: 'table',    x: 3003, y: 3337 },
+    { type: 'table',    x: 3345, y: 3017 },
+    { type: 'bookcase', x: 3401, y: 3004 },
+    { type: 'table',    x: 5082, y: 3017 },
+    { type: 'bookcase', x: 5138, y: 3004 },
+    // Mid level
+    { type: 'bookcase', x:  895, y: 2012 },
+    { type: 'table',    x: 1974, y: 2025 },
+    { type: 'table',    x: 4412, y: 2025 },
+    // Upper level
+    { type: 'table',    x:  499, y: 1801 },
+    { type: 'bookcase', x:  555, y: 1788 },
+    { type: 'table',    x:  705, y: 1353 },
+    { type: 'bookcase', x: 1726, y: 1340 },
+    { type: 'bookcase', x: 2963, y:  892 },
   ],
-  crates: [
-    { x:  700, y: 3080 }, { x: 1500, y: 3080 },
-    { x: 2500, y: 3080 }, { x: 3500, y: 3080 },
-    { x: 4500, y: 3080 },
+  spikeFloors: [
+    { x: 178, y: 3004, xEnd: 796, scale: 2 },
   ],
+  spikeBalls: [
+    { x: 5177, y: 2332, count: 2 },
+    { x: 2800, y: 2620, count: 1 },
+    { x: 1611, y: 3004, count: 2 },
+    { x: 2516, y: 1564, count: 3 },
+  ],
+  crates: [],
   items: [
-    { x:  500, y: 3060, type: 'heart' },
-    { x: 1000, y: 3060, type: 'ability', ability: AbilityType.Fire     },
-    { x: 2000, y: 3060, type: 'ability', ability: AbilityType.Lightning },
-    { x: 3000, y: 3060, type: 'ability', ability: AbilityType.Ice      },
-    { x: 4000, y: 3060, type: 'heart' },
+    { x: 2056, y: 3500, type: 'roly-poly' },
+    { x: 5404, y: 2012, type: 'roly-poly' },
+    { x: 3666, y: 1116, type: 'roly-poly' },
   ],
 }
 
@@ -417,14 +342,15 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   exitPositions: { left: 1952, right: 1952 },
   isBossRoom: true,
   bossDefeatedKey: 'dadDefeated',
-  backPortal: { x: 2700, y: 1984 },
+  backPortal: { x: 2700, y: 1956 },
   leftExitForward: true,
-  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 428, y: 1952 } },
+  entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 400, y: 1948 } },
   bossHp: 20,
-  bossKey: 'sheet-dad',
+  bossName: 'KING ZOMBIE',
+  bossKey: 'sheet-king-zombie',
   bossFlying: false,
   bossSpawnX: 1187,
-  bossSpawnY: 1800,
+  bossSpawnY: 1805,
   starOrb: { x: 226, y: 174 },
   platforms: [],
   enemies: [],
@@ -447,10 +373,30 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   exitPositions: { left: 2928 },
   entrySpawns: { right: { x: 5300, y: 608 }, left: { x: 597, y: 672 } },
   bossPortal: { x: 517, y: 672 },
-  platforms: [],
+  barrierExit: { x: 5500, y: 608 },
+  backPortalEntryDir: 'right',
+  platforms: [
+    { x: 5300, y: 650, w: 400, h: 20 },   // buffer at right-entry spawn to prevent fall
+    { x: 5556, y: 2928, w: 24, h: 5856 }, // right-edge wall prevents falling off world boundary
+  ],
   enemies: [],
   destructibles: [],
   furnitureSpawns: [],
+  spikeFloors: [
+    { x: 178, y: 3580, xEnd: 3580, scale: 2 },
+  ],
+  spikeBalls: [
+    // mid-map cluster (redistributed from top-left and top-right)
+    { x: 1800, y: 1400, count: 3 },
+    { x: 3400, y: 4000, count: 4 },
+    { x: 1200, y: 1800, count: 3 },
+    { x: 3600, y: 2000, count: 4 },
+    // bottom corners
+    { x:  400, y: 5500, count: 7 },
+    { x: 5200, y: 5500, count: 7 },
+    // center
+    { x: 2784, y: 2928, count: 5 },
+  ],
   crates: [],
   items: [],
 }
@@ -468,15 +414,23 @@ const BOSS_THREE_ROOM: RoomConfig = {
   exitPositions: { left: 640, right: 1952 },
   isBossRoom: true,
   bossDefeatedKey: 'momDefeated',
-  rightExitBack: true,
+  backPortal: { x: 866, y: 1948 },
+  backPortalEntryDir: 'left',
   entrySpawns: { left: { x: 429, y: 1952 } },
   bossHp: 25,
-  bossKey: 'sheet-enemy-mom',
+  bossName: 'CELERY MAN',
+  bossKey: 'sheet-celery',
   bossFlying: false,
+  bossStationary: true,
+  bossAttackRate: 700,
   bossSpawnX: 2519,
   bossSpawnY: 1800,
   starOrb: { x: 1219, y: 512 },
-  platforms: [],
+  comingSoonGlowRight: true,
+  platforms: [
+    { x: 16,   y: 640,  w: 32, h: 130 },   // seal left exit
+    { x: 3152, y: 1952, w: 32, h: 130 },   // invisible barrier keeps right exit sealed
+  ],
   enemies: [],
   destructibles: [],
   furnitureSpawns: [],

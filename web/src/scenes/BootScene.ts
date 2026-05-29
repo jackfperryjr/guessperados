@@ -124,12 +124,14 @@ const ANIM_FRAMES = {
 // ── Enemy sheet config ────────────────────────────────────────────────────────
 // New enemy sprites: 256×256 with 16 views in a 4×4 grid → fw=64, fh=64
 const ENEMY_SHEETS: { key: string; file: string; fw: number; fh: number; walkStart: number; walkEnd: number }[] = [
-  { key: 'sheet-enemy-zombie',   file: 'zombie.png',   fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
-  { key: 'sheet-enemy-duck',     file: 'duck.png',     fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
-  { key: 'sheet-enemy-skeleton', file: 'skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
-  { key: 'sheet-enemy-mom',      file: 'mom.png',      fw: 64, fh: 64, walkStart: 4,  walkEnd: 15 },
-  { key: 'sheet-dragon',         file: 'dragon.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
-  { key: 'sheet-dad',            file: 'dad.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-enemy-zombie',   file: 'enemies/zombie.png',        fw: 64, fh: 64, walkStart: 11, walkEnd: 14 },
+  { key: 'sheet-enemy-duck',     file: 'enemies/duck.png',          fw: 64, fh: 64, walkStart: 4,  walkEnd: 7  },
+  { key: 'sheet-enemy-skeleton', file: 'enemies/skeleton.png',      fw: 64, fh: 64, walkStart: 0,  walkEnd: 7  },
+  { key: 'sheet-celery',         file: 'enemies/celery.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-dragon',         file: 'enemies/dragon.png',        fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-zombie',    file: 'enemies/king_zombie.png',   fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-king-skeleton',  file: 'enemies/king_skeleton.png', fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
+  { key: 'sheet-enemy-bat',      file: 'enemies/bat.png',           fw: 64, fh: 64, walkStart: 0,  walkEnd: 3  },
 ]
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -139,28 +141,35 @@ export class BootScene extends Phaser.Scene {
   preload() {
     if (SPRITES_CONFIGURED) {
       for (const [key, { file, fw, fh }] of Object.entries(SHEETS)) {
-        this.load.spritesheet(`sheet-${key}`, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
+        this.load.spritesheet(`sheet-${key}`, `assets/players/${file}`, { frameWidth: fw, frameHeight: fh })
       }
     }
     for (const { key, file, fw, fh } of ENEMY_SHEETS) {
       this.load.spritesheet(key, `assets/${file}`, { frameWidth: fw, frameHeight: fh })
     }
     for (const c of ['callum', 'carter', 'conrad', 'coco', 'abby', 'eric', 'scarlett']) {
-      this.load.image(`head-${c}`, `assets/${c}_head.png`)
+      this.load.image(`head-${c}`, `assets/players/${c}_head.png`)
     }
-    this.load.image('fire_ability_icon',      'assets/fire_ability_icon.png')
-    this.load.image('lightning_ability_icon', 'assets/lightning_ability_icon.png')
-    this.load.image('ice_ability_icon',       'assets/ice_ability_icon.png')
-    this.load.image('empty_ability_icon',     'assets/empty_ability.png')
-    this.load.image('speed_boost_icon',       'assets/speed.png')
-    this.load.image('strength_boost_icon',    'assets/strength.png')
-    this.load.image('fire_ability',           'assets/fire_ability.png')
-    this.load.image('lightning_ability',      'assets/lightning_ability.png')
-    this.load.image('ice_ability',            'assets/ice_ability.png')
+    this.load.image('fire_ability_icon',      'assets/game_icons/fire_ability_icon.png')
+    this.load.image('lightning_ability_icon', 'assets/game_icons/lightning_ability_icon.png')
+    this.load.image('ice_ability_icon',       'assets/game_icons/ice_ability_icon.png')
+    this.load.image('empty_ability_icon',     'assets/game_icons/empty_ability.png')
+    this.load.image('speed_boost_icon',       'assets/game_icons/speed.png')
+    this.load.image('strength_boost_icon',    'assets/game_icons/strength.png')
+    this.load.image('invulnerability_icon',   'assets/game_icons/invulnerable.png')
+    this.load.image('fire_ability',           'assets/game_icons/fire_ability.png')
+    this.load.image('lightning_ability',      'assets/game_icons/lightning_ability.png')
+    this.load.image('ice_ability',            'assets/game_icons/ice_ability.png')
     this.load.image('proj-fire',      'assets/projectiles/fireball.png')
     this.load.image('proj-ice',       'assets/projectiles/icecycle.png')
     this.load.image('proj-lightning', 'assets/projectiles/lightningbolt.png')
-    this.load.image('logo', 'assets/friendsslay.jpg')
+    this.load.image('spike-ball',     'assets/projectiles/spike_ball.png')
+    this.load.image('spike-floor1',   'assets/projectiles/spike_floor1.png')
+    this.load.image('spike-floor2',   'assets/projectiles/spike_floor2.png')
+    this.load.image('item-pizza',     'assets/items/pizza.png')
+    this.load.image('item-worm',      'assets/npcs/worm.png')
+    this.load.image('item-roly-poly', 'assets/npcs/roly_poly.png')
+    this.load.image('logo', 'assets/app_icons/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
     this.load.image('tileset', 'tileset/one/spritesheet.png')
@@ -177,6 +186,14 @@ export class BootScene extends Phaser.Scene {
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
     this.load.audio('music-boss',     'assets/music/boss_dragon.mp3')
+    // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
+    const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
+    for (const char of CUTSCENE_CHARS) {
+      // scarlett's skeleton king filename has a typo
+      const skelFile = char === 'scarlett' ? `${char}_skeletong_king.jpg` : `${char}_skeleton_king.jpg`
+      this.load.image(`cutscene-${char}-skeleton_king`, `assets/players/${skelFile}`)
+      this.load.image(`cutscene-${char}-zombie_king`,   `assets/players/${char}_zombie_king.jpg`)
+    }
   }
 
   create() {

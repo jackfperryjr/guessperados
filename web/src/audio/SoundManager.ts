@@ -40,7 +40,7 @@ function tone(
   osc.stop(t + dur + 0.03)
 }
 
-function noiseBlip(t: number, dur: number, vol: number, freq: number, q = 3): void {
+function noiseBlip(t: number, dur: number, vol: number, freq: number, q = 3, dest?: AudioNode): void {
   const c    = ac()
   const size = Math.ceil(dur * c.sampleRate)
   const buf  = c.createBuffer(1, size, c.sampleRate)
@@ -57,7 +57,7 @@ function noiseBlip(t: number, dur: number, vol: number, freq: number, q = 3): vo
   gain.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   src.connect(filter)
   filter.connect(gain)
-  gain.connect(c.destination)
+  gain.connect(dest ?? c.destination)
   src.start(t)
   src.stop(t + dur + 0.03)
 }
@@ -89,6 +89,78 @@ function scheduleBgLoop(start: number): void {
   const wait = (start + BG_LOOP - c.currentTime) * 1000 - 100
   _bgTimer = setTimeout(() => {
     if (_bgPlaying) scheduleBgLoop(start + BG_LOOP)
+  }, Math.max(0, wait))
+}
+
+// ── boss-victory cutscene fanfare ─────────────────────────────────────────────
+
+let _fanfarePlaying = false
+let _fanfareTimer: ReturnType<typeof setTimeout> | null = null
+let _fanfareStopTimer: ReturnType<typeof setTimeout> | null = null
+let _fanfareGain: GainNode | null = null
+
+function getFanfareOut(): GainNode {
+  const c = ac()
+  if (!_fanfareGain) {
+    _fanfareGain = c.createGain()
+    _fanfareGain.gain.value = 1
+    _fanfareGain.connect(c.destination)
+  }
+  return _fanfareGain
+}
+
+// FF-style victory fanfare — 172 BPM, ~3.5 s loop
+// Structure: fast ascending arpeggio → triumphant phrase → held peak → resolved cadence
+const FAN_BPM  = 172
+const FAN_BEAT = 60 / FAN_BPM   // ≈ 0.349 s per beat
+const FAN_LOOP = 10 * FAN_BEAT  // 10 beats ≈ 3.49 s
+
+function scheduleFanfareLoop(start: number): void {
+  const c = ac()
+  const d = getFanfareOut()
+  const b = FAN_BEAT
+
+  // ── Fast ascending arpeggio (8th notes, beats 0–1) ──────────────────────
+  tone(261.63, start + 0.0*b, b*0.45, 0.14, 'square', d)   // C4
+  tone(329.63, start + 0.5*b, b*0.45, 0.14, 'square', d)   // E4
+  tone(392.00, start + 1.0*b, b*0.45, 0.16, 'square', d)   // G4
+  tone(523.25, start + 1.5*b, b*0.45, 0.16, 'square', d)   // C5
+
+  // ── Triumphant main phrase (beats 2–5) ──────────────────────────────────
+  tone(659.25, start + 2.0*b, b*0.80, 0.18, 'square', d)   // E5
+  tone(523.25, start + 3.0*b, b*0.45, 0.16, 'square', d)   // C5
+  tone(587.33, start + 3.5*b, b*0.45, 0.16, 'square', d)   // D5
+  tone(659.25, start + 4.0*b, b*1.40, 0.19, 'square', d)   // E5 (held)
+
+  // ── Peak + cadence (beats 5.5–10) ───────────────────────────────────────
+  tone(783.99, start + 5.5*b, b*0.45, 0.17, 'square', d)   // G5
+  tone(659.25, start + 6.0*b, b*0.45, 0.16, 'square', d)   // E5
+  tone(587.33, start + 6.5*b, b*0.45, 0.15, 'square', d)   // D5
+  tone(523.25, start + 7.0*b, b*3.00, 0.19, 'square', d)   // C5 (held to loop end)
+
+  // ── Harmony (thirds above main melody) ──────────────────────────────────
+  tone(392.00, start + 2.0*b, b*0.80, 0.07, 'triangle', d) // G4
+  tone(329.63, start + 3.0*b, b*0.45, 0.07, 'triangle', d) // E4
+  tone(392.00, start + 3.5*b, b*0.45, 0.07, 'triangle', d) // G4
+  tone(523.25, start + 4.0*b, b*1.40, 0.08, 'triangle', d) // C5
+  tone(659.25, start + 5.5*b, b*0.45, 0.07, 'triangle', d) // E5
+  tone(329.63, start + 7.0*b, b*3.00, 0.08, 'triangle', d) // E4
+
+  // ── Bass punches ─────────────────────────────────────────────────────────
+  tone(130.81, start + 0.0*b, b*0.6, 0.22, 'triangle', d)  // C3
+  tone(196.00, start + 2.0*b, b*0.6, 0.20, 'triangle', d)  // G3
+  tone(130.81, start + 4.0*b, b*0.6, 0.22, 'triangle', d)  // C3
+  tone(196.00, start + 7.0*b, b*0.6, 0.20, 'triangle', d)  // G3
+
+  // ── Percussion hits ──────────────────────────────────────────────────────
+  noiseBlip(start + 0.0*b, 0.04, 0.16, 1000, 8, d)
+  noiseBlip(start + 2.0*b, 0.04, 0.13, 900,  7, d)
+  noiseBlip(start + 4.0*b, 0.04, 0.16, 1000, 8, d)
+  noiseBlip(start + 7.0*b, 0.04, 0.13, 900,  7, d)
+
+  const wait = (start + FAN_LOOP - c.currentTime) * 1000 - 80
+  _fanfareTimer = setTimeout(() => {
+    if (_fanfarePlaying) scheduleFanfareLoop(start + FAN_LOOP)
   }, Math.max(0, wait))
 }
 
@@ -135,6 +207,25 @@ function scheduleWinLoop(start: number): void {
 // ── music track ──────────────────────────────────────────────────────────────
 
 let _track: Phaser.Sound.BaseSound | null = null
+let _fadeTimer: ReturnType<typeof setInterval> | null = null
+
+function clearFadeTimer() {
+  if (_fadeTimer !== null) { clearInterval(_fadeTimer); _fadeTimer = null }
+}
+
+function _startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume: number) {
+  _track = manager.add(key, { loop: true, volume: key === 'music-gameplay' ? 0 : volume })
+  _track.play()
+  if (key === 'music-gameplay') {
+    let v = 0
+    _fadeTimer = setInterval(() => {
+      if (!_track || _track.key !== key) { clearFadeTimer(); return }
+      v = Math.min(volume, v + volume / 15)
+      try { (_track as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+      if (v >= volume) clearFadeTimer()
+    }, 100)
+  }
+}
 
 // ── public API ────────────────────────────────────────────────────────────────
 
@@ -286,6 +377,34 @@ export const SoundManager = {
     if (_bgTimer !== null) { clearTimeout(_bgTimer); _bgTimer = null }
   },
 
+  // ── boss-victory cutscene fanfare ────────────────────────────────────────────
+
+  startCutsceneMusic(durationMs = 15000) {
+    if (_fanfarePlaying) return
+    _fanfarePlaying = true
+    // Ensure a fresh gain node each time (old one may have been disconnected)
+    _fanfareGain = null
+    getFanfareOut().gain.value = 1
+    scheduleFanfareLoop(ac().currentTime + 0.15)
+    if (_fanfareStopTimer !== null) clearTimeout(_fanfareStopTimer)
+    _fanfareStopTimer = setTimeout(() => { this.stopCutsceneMusic() }, durationMs)
+  },
+
+  stopCutsceneMusic() {
+    _fanfarePlaying = false
+    if (_fanfareTimer !== null)     { clearTimeout(_fanfareTimer);     _fanfareTimer = null }
+    if (_fanfareStopTimer !== null) { clearTimeout(_fanfareStopTimer); _fanfareStopTimer = null }
+    // Ramp master gain to silence instantly so already-scheduled notes cut out
+    if (_fanfareGain) {
+      const c = ac()
+      _fanfareGain.gain.cancelScheduledValues(c.currentTime)
+      _fanfareGain.gain.setTargetAtTime(0, c.currentTime, 0.008)
+      const g = _fanfareGain
+      setTimeout(() => { try { g.disconnect() } catch (_e) {} }, 150)
+      _fanfareGain = null
+    }
+  },
+
   // ── victory music ─────────────────────────────────────────────────────────
 
   startVictoryMusic() {
@@ -303,15 +422,45 @@ export const SoundManager = {
 
   startTrack(manager: Phaser.Sound.BaseSoundManager, key: string, volume = 0.75) {
     if (_track && _track.key === key && (_track as Phaser.Sound.WebAudioSound).isPlaying) return
-    _track?.stop()
-    _track?.destroy()
-    _track = manager.add(key, { loop: true, volume })
-    _track.play()
+    clearFadeTimer()
+
+    // Fade out old gameplay track before switching to a new one
+    const old = _track
+    _track = null
+    if (old && old.key === 'music-gameplay') {
+      let v = (old as Phaser.Sound.WebAudioSound).volume ?? volume
+      _fadeTimer = setInterval(() => {
+        v = Math.max(0, v - v * 0.35)
+        try { (old as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+        if (v < 0.02) {
+          clearFadeTimer()
+          try { old.stop(); old.destroy() } catch (_e) {}
+          _startTrack(manager, key, volume)
+        }
+      }, 60)
+    } else {
+      old?.stop(); old?.destroy()
+      _startTrack(manager, key, volume)
+    }
   },
 
   stopTrack() {
-    _track?.stop()
-    _track?.destroy()
+    clearFadeTimer()
+    if (!_track) return
+    const t = _track
     _track = null
+    if (t.key === 'music-gameplay') {
+      let v = (t as Phaser.Sound.WebAudioSound).volume ?? 0.75
+      _fadeTimer = setInterval(() => {
+        v = Math.max(0, v - v * 0.35)
+        try { (t as Phaser.Sound.WebAudioSound).setVolume(v) } catch (_e) {}
+        if (v < 0.02) {
+          clearFadeTimer()
+          try { t.stop(); t.destroy() } catch (_e) {}
+        }
+      }, 60)
+    } else {
+      t.stop(); t.destroy()
+    }
   },
 }
