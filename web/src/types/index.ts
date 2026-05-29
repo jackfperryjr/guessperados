@@ -8,6 +8,7 @@ export enum AbilityType {
   Fire = 'Fire',
   Lightning = 'Lightning',
   Ice = 'Ice',
+  Bat = 'Bat',
 }
 
 export enum DamageType {

@@ -42,8 +42,11 @@ export class Boss extends Enemy {
         body.setAllowGravity(false)
         this.bossFlying = true
       }
-      body.setSize(110, 80)
-      body.setOffset((this.displayWidth - 110) / 2, flying ? 20 : Math.round(this.displayHeight * 0.25))
+      // setSize/setOffset use source (pre-scale) pixels.
+      // body.bottom = sprite.y + scaleY*(offset.y − frameOriginY) + sourceH*scaleY
+      // offset.y = 41 puts body.bottom == sprite.bottom, so boss stands on the floor surface.
+      body.setSize(32, 23)
+      body.setOffset(16, flying ? 20 : 41)
       const walkAnim = `${textureKey}-walk`
       if (scene.anims.exists(walkAnim)) this.play(walkAnim)
     } else {

@@ -3,7 +3,7 @@ import { AbilityType, DamageType } from '../types'
 import { BootScene } from '../scenes/BootScene'
 import { SoundManager } from '../audio/SoundManager'
 
-const MOVE_SPEED        = 220
+const MOVE_SPEED        = 350
 const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
 const INHALE_RANGE      = 190
@@ -13,10 +13,11 @@ const SPIT_VX           = 540
 const SPIT_VY           = -320
 
 export const ABILITY_AMMO: Record<AbilityType, number> = {
-  [AbilityType.None]:     0,
-  [AbilityType.Fire]:     10,
+  [AbilityType.None]:      0,
+  [AbilityType.Fire]:      10,
   [AbilityType.Lightning]: 3,
-  [AbilityType.Ice]:      10,
+  [AbilityType.Ice]:       10,
+  [AbilityType.Bat]:       0,
 }
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -64,12 +65,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
-    this.setScale(1.15)  // 64px frame → ~74px display
+    this.setScale(1.3)  // 64px frame → ~110px display
 
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(false)
-    body.setSize(28, 40, false)
-    body.setOffset(18, 20)
+    body.setSize(42, 60, false)
+    body.setOffset(18, 0)
 
   }
 

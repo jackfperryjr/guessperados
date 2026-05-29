@@ -27,6 +27,7 @@ export class VictoryScene extends Phaser.Scene {
     this.spawnStars(width, height)
     this.buildUI(cx, cy)
 
+    SoundManager.stopTrack()
     SoundManager.startVictoryMusic()
     this.events.once('shutdown', () => SoundManager.stopVictoryMusic())
   }

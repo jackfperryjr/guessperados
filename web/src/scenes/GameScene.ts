@@ -62,6 +62,7 @@ export class GameScene extends Phaser.Scene {
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup
   private spikeBalls: Phaser.Physics.Arcade.Image[] = []
+  private spikeFloorTiles: Phaser.Physics.Arcade.Image[] = []
   private cameraTarget!: Phaser.GameObjects.Rectangle
   private bgLayers: Phaser.GameObjects.TileSprite[] = []
   private throneLabel: Phaser.GameObjects.Text | null = null
@@ -72,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private bossDefeated = false
   private bossRoomLeftWall: Phaser.GameObjects.TileSprite | null = null
   private bossRoomLeftBarrier: Phaser.GameObjects.Rectangle | null = null
+  private bossRoomRightBarrier: Phaser.GameObjects.Rectangle | null = null
   private level2ExitPos:  { x: number; y: number } | null = null
   private backExitPos:    { x: number; y: number } | null = null
   private backPortalPos:  { x: number; y: number } | null = null
@@ -100,7 +102,7 @@ export class GameScene extends Phaser.Scene {
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
     this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.inhaleGraphics = []
-    this.tilemapLayers = []; this.spikeBalls = []
+    this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
     this.nm = null
@@ -114,6 +116,7 @@ export class GameScene extends Phaser.Scene {
     this.bossDefeated = false
     this.bossRoomLeftWall = null
     this.bossRoomLeftBarrier = null
+    this.bossRoomRightBarrier = null
     this.level2ExitPos = null
     this.backExitPos   = null
     this.backPortalPos = null
@@ -176,6 +179,7 @@ export class GameScene extends Phaser.Scene {
       this.cfg.name,
       (this.cfg.isBossRoom ?? false) && !_bossAlreadyDefeated,
       this.cfg.bossHp ?? 0,
+      this.cfg.bossName ?? 'BOSS',
     )
 
     if (this.boss) {
@@ -185,6 +189,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.wirePlayerUIEvents()
+    this.ui.updateWormCount(this.registry.get('wormCount') ?? 0)
+    this.ui.updateRolyPolyCount(this.registry.get('rolyPolyCount') ?? 0)
     this.buildPauseMenu()
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
@@ -630,30 +636,20 @@ export class GameScene extends Phaser.Scene {
         [AbilityType.Ice]:      'ice_ability',
       }
       const tex = item.type === 'heart'   ? 'item-heart'
+                : item.type === 'pizza'   ? 'item-pizza'
+                : item.type === 'worm'    ? 'item-worm'
                 : item.type === 'life'    ? 'item-life'
                 : item.type === 'mystery' ? 'item-mystery'
                 : item.type === 'ability' ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
                 : 'item-orb'
-      const ABILITY_RING: Partial<Record<AbilityType, number>> = {
-        [AbilityType.Fire]: 0xff6600, [AbilityType.Lightning]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
-      }
-      const ringColor = item.type === 'ability'
-        ? (ABILITY_RING[item.ability ?? AbilityType.None] ?? 0xffffff)
-        : 0xffffff
       const isHidden = item.type === 'speed' || item.type === 'attack-boost'
-      const ring = (!isHidden && item.type !== 'heart')
-        ? this.add.circle(item.x, item.y, 20, 0x000000, 0).setStrokeStyle(2, ringColor).setDepth(7)
-        : null
-
-      const img = this.add.image(item.x, item.y, tex).setDepth(8)
-        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : 1.2)
-      if (item.type === 'speed' || item.type === 'attack-boost') img.setAlpha(0)
+      const frame = item.type === 'worm' ? 4 : undefined
+      const img = this.add.image(item.x, item.y, tex, frame).setDepth(8)
+        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12 : item.type === 'worm' ? 1.0 : 1.2)
+      if (isHidden) img.setAlpha(0)
       img.setData('item', item)
-      img.setData('ring', ring)
-
-      const tweenTargets: Phaser.GameObjects.GameObject[] = ring ? [img, ring] : [img]
       this.tweens.add({
-        targets: tweenTargets, y: item.y - 12,
+        targets: img, y: item.y - 12,
         duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       })
       this.collectibleSprites.push(img)
@@ -661,9 +657,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private collectItem(player: Player, item: ItemSpawn) {
-    if (item.type === 'heart') {
+    if (item.type === 'heart' || item.type === 'pizza') {
       player.hearts = Math.min(5, player.hearts + 1)
-      this.showPopup(item.x, item.y, '+HEART', '#ff4d6a')
+      this.showPopup(item.x, item.y, item.type === 'pizza' ? '+PIZZA' : '+HEART', '#ff4d6a')
       SoundManager.collectHeart()
     } else if (item.type === 'life') {
       const lives: number = (this.registry.get('lives') ?? 1) + 1
@@ -688,6 +684,18 @@ export class GameScene extends Phaser.Scene {
       player.applyStrengthBoost(true)
       this.showPopup(item.x, item.y, 'POWER UP!', '#ff4444')
       SoundManager.collectAbility()
+    } else if (item.type === 'worm') {
+      const wc = (this.registry.get('wormCount') ?? 0) + 1
+      this.registry.set('wormCount', wc)
+      this.ui.updateWormCount(wc)
+      this.showPopup(item.x, item.y, 'WORM!', '#aaffaa')
+      SoundManager.collectHeart()
+    } else if (item.type === 'roly-poly') {
+      const rc = (this.registry.get('rolyPolyCount') ?? 0) + 1
+      this.registry.set('rolyPolyCount', rc)
+      this.ui.updateRolyPolyCount(rc)
+      this.showPopup(item.x, item.y, 'ROLY POLY!', '#ffddaa')
+      SoundManager.collectHeart()
     }
     this.addScore(500)
   }
@@ -809,11 +817,34 @@ export class GameScene extends Phaser.Scene {
       }
 
       for (const fs of (this.cfg.furnitureSpawns ?? [])) {
-        const floorY = findFloorSurface(fs.x, fs.scanFromY ?? 0)
-        if (floorY === null) continue
         const fh = fs.type === 'bookcase' ? 80 : fs.type === 'table' ? 36 : 40
+        let furnY: number
+        if (fs.y !== undefined) {
+          furnY = fs.y
+        } else {
+          const floorY = findFloorSurface(fs.x, fs.scanFromY ?? 0)
+          if (floorY === null) continue
+          furnY = floorY - fh / 2
+        }
         const hp = fs.type === 'chest' ? 3 : fs.type === 'bookcase' ? 2 : 1
-        this.spawnFurniturePiece(fs.type, fs.x, floorY - fh / 2, fs.ability ?? AbilityType.None, hp)
+        this.spawnFurniturePiece(fs.type, fs.x, furnY, fs.ability ?? AbilityType.None, hp)
+      }
+
+      // Floor spike tiles
+      for (const sf of (this.cfg.spikeFloors ?? [])) {
+        const tex1 = sf.variant === 2 ? 'spike-floor2' : 'spike-floor1'
+        const tex2 = sf.variant === 2 ? 'spike-floor1' : 'spike-floor2'
+        const sc   = sf.scale ?? 1
+        const step = Math.round(sc * 32)
+        const end  = sf.xEnd ?? sf.x
+        let idx = 0
+        for (let sx = Math.min(sf.x, end); sx <= Math.max(sf.x, end); sx += step, idx++) {
+          const img = this.physics.add.image(sx + step / 2, sf.y, idx % 2 === 0 ? tex1 : tex2)
+            .setDepth(3).setScale(sc)
+          ;(img.body as Phaser.Physics.Arcade.Body).setAllowGravity(false)
+          ;(img.body as Phaser.Physics.Arcade.Body).setImmovable(true)
+          this.spikeFloorTiles.push(img)
+        }
       }
 
       for (const e of this.cfg.enemies) {
@@ -836,12 +867,17 @@ export class GameScene extends Phaser.Scene {
           const runIndex0: number       = this.registry.get('runIndex') ?? 0
           if (runIndex0 + 1 < runRooms0.length) this.openLevel2Exit(W)
         } else {
-          // Seal the left exit until the boss dies
+          // Seal both exits until the boss dies
           const barrierH = this.cfg.worldHeight ?? 720
           const barrier = this.add.rectangle(150, barrierH / 2, 20, barrierH, 0x000000, 0)
           this.physics.add.existing(barrier, true)
           this.platforms.add(barrier as unknown as Phaser.Physics.Arcade.Image)
           this.bossRoomLeftBarrier = barrier
+
+          const rBarrier = this.add.rectangle(this.cfg.bossRightBarrierX ?? W - 150, this.cfg.bossRightBarrierY ?? barrierH / 2, 20, barrierH, 0x000000, 0)
+          this.physics.add.existing(rBarrier, true)
+          this.platforms.add(rBarrier as unknown as Phaser.Physics.Arcade.Image)
+          this.bossRoomRightBarrier = rBarrier
 
           this.boss = new Boss(this, this.cfg.bossSpawnX, bossY, this.cfg.bossHp, 3000, this.cfg.bossKey, this.cfg.bossFlying !== false)
           this.boss.on('bossDead', () => {
@@ -850,6 +886,10 @@ export class GameScene extends Phaser.Scene {
             if (this.bossRoomLeftBarrier) {
               ;(this.bossRoomLeftBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
               this.bossRoomLeftBarrier = null
+            }
+            if (this.bossRoomRightBarrier) {
+              ;(this.bossRoomRightBarrier.body as Phaser.Physics.Arcade.StaticBody).enable = false
+              this.bossRoomRightBarrier = null
             }
             SoundManager.bossDeath()
             SoundManager.startTrack(this.sound, 'music-gameplay')
@@ -861,17 +901,13 @@ export class GameScene extends Phaser.Scene {
             const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
             const runIndex: number       = this.registry.get('runIndex') ?? 0
             if (runIndex + 1 < runRooms.length) {
-              // More levels — reveal right exit after brief celebration
+              // More levels — reveal right exit and back portal after brief celebration
+              if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
               this.time.delayedCall(1800, () => { this.openLevel2Exit(W) })
             } else {
-              // Final boss — auto-victory
-              this.time.delayedCall(3200, () => {
-                if (!this.roomTransitioning) {
-                  this.roomTransitioning = true
-                  this.cameras.main.fadeOut(900, 0, 0, 0)
-                  this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('VictoryScene'))
-                }
-              })
+              // Final boss — show explore/exit overlay instead of auto-transitioning
+              if (this.cfg.backPortal) this.time.delayedCall(800, () => this.buildBackPortal())
+              this.time.delayedCall(1800, () => this.showBossDefeatedOverlay())
             }
           })
         }
@@ -965,63 +1001,8 @@ export class GameScene extends Phaser.Scene {
 
       // Non-glowing back portal — only visible when boss already defeated (CONTINUE mode)
       if (this.cfg.backPortal) {
-        const alreadyDefeated = !!(this.cfg.bossDefeatedKey && this.registry.get(this.cfg.bossDefeatedKey))
-        if (alreadyDefeated) {
-          const { x, y } = this.cfg.backPortal
-          const cy = y - 106
-
-          // Stone arch frame (no glow)
-          const arch = this.add.graphics().setDepth(2)
-          arch.fillStyle(0x2a1a0e, 1)
-          arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
-          arch.fillStyle(0x150903, 1)
-          arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
-          this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
-          this.add.rectangle(x, cy - 132, 12, 12, 0x5a3c1e, 0.75).setDepth(2)
-
-          // Wood door panels
-          const panelTop = cy - 68
-          const panelBot = cy + 134
-          const panelH   = panelBot - panelTop
-          const wp = this.add.graphics().setDepth(2)
-          wp.fillStyle(0x6b3e1c, 1)
-          wp.fillRect(x - 72, panelTop, 70, panelH)
-          wp.fillStyle(0x6b3e1c, 1)
-          wp.fillRect(x + 2, panelTop, 70, panelH)
-          for (let row = 4; row < panelH; row += 10) {
-            const prominent = row % 30 === 0
-            wp.fillStyle(prominent ? 0x3d2010 : 0x4e2c14, prominent ? 0.55 : 0.25)
-            wp.fillRect(x - 72, panelTop + row, 70, prominent ? 3 : 2)
-            wp.fillRect(x + 2,  panelTop + row, 70, prominent ? 3 : 2)
-          }
-          wp.fillStyle(0x8a5530, 0.30)
-          wp.fillRect(x - 72, panelTop, 4, panelH)
-          wp.fillRect(x + 68, panelTop, 4, panelH)
-          this.add.rectangle(x, panelTop + panelH / 2, 4, panelH, 0x120804).setDepth(2)
-
-          // Iron banding
-          const bandYs = [cy - 30, cy + 40, cy + 100]
-          bandYs.forEach(by => {
-            this.add.rectangle(x, by,     140, 7, 0x252525).setDepth(2)
-            this.add.rectangle(x, by - 1, 140, 3, 0x3c3c3c, 0.50).setDepth(2)
-            ;[x - 56, x - 28, x + 2, x + 30, x + 58].forEach(rx => {
-              this.add.circle(rx, by, 3, 0x2e2e2e).setDepth(2)
-              this.add.circle(rx, by, 1, 0x4c4c4c).setDepth(2)
-            })
-          })
-
-          // Ring knockers
-          ;[-30, 30].forEach(ox => {
-            this.add.circle(x + ox, cy + 38, 8, 0x8a6830).setDepth(2)
-            this.add.circle(x + ox, cy + 38, 5, 0x241508).setDepth(2)
-            this.add.circle(x + ox, cy + 46, 4, 0x8a6830).setDepth(2)
-          })
-
-          this.backPortalLbl = this.add.text(x, cy - 158, '↑ RETURN', {
-            fontSize: '9px', fontFamily: FONT, color: '#000000',
-          }).setOrigin(0.5).setDepth(11).setVisible(false)
-          this.backPortalPos = this.cfg.backPortal
-        }
+        const gateKey = this.cfg.backPortalKey ?? this.cfg.bossDefeatedKey
+        if (!!(gateKey && this.registry.get(gateKey))) this.buildBackPortal()
       }
 
       // Star-burst orb — boss room instant-kill collectible
@@ -1093,6 +1074,28 @@ export class GameScene extends Phaser.Scene {
       const backRunIndex: number = this.registry.get('runIndex') ?? 0
       if (!this.cfg.isBossRoom && backRunIndex > 0) {
         this.backExitPos = { x: 0, y: 0 }  // flag only; trigger uses p.x <= 100
+      }
+
+      // Optional visual barrier: draw a stone column to mark an exit seal
+      if (this.cfg.barrierVisual) {
+        const bv = this.cfg.barrierVisual
+        const bx = bv.x - bv.w / 2
+        const by = bv.y - bv.h / 2
+        const g = this.add.graphics().setDepth(2)
+        // Base fill — dark stone
+        g.fillStyle(0x2c2040, 1)
+        g.fillRect(bx, by, bv.w, bv.h)
+        // Highlight left edge
+        g.fillStyle(0x3c3058, 1)
+        g.fillRect(bx, by, 3, bv.h)
+        // Shadow right edge
+        g.fillStyle(0x1a1028, 1)
+        g.fillRect(bx + bv.w - 3, by, 3, bv.h)
+        // Mortar lines every 32px to match tileset grid
+        g.fillStyle(0x1c1532, 1)
+        for (let row = 0; row <= bv.h; row += 32) {
+          g.fillRect(bx, by + row, bv.w, 2)
+        }
       }
 
       return
@@ -1417,7 +1420,7 @@ export class GameScene extends Phaser.Scene {
       this.addScore(SCORE_DESTRUCT)
       visuals.forEach(go => { if (go.active) go.destroy() })
       if (obj.abilityDrop !== AbilityType.None) this.spawnAbilityDrop(obj.x, obj.y, obj.abilityDrop)
-      if (Math.random() < 0.15) this.spawnFurnitureDrop(obj.x, obj.y)
+      if (Math.random() < 0.25) this.spawnFurnitureDrop(obj.x, obj.y)
     })
   }
 
@@ -1451,24 +1454,18 @@ export class GameScene extends Phaser.Scene {
       [AbilityType.Lightning]: 'lightning_ability',
       [AbilityType.Ice]:      'ice_ability',
     }
-    const ringColorMap: Partial<Record<AbilityType, number>> = {
-      [AbilityType.Fire]: 0xff6600, [AbilityType.Lightning]: 0xffdd00, [AbilityType.Ice]: 0x66ccff,
-    }
     const dropY = y - 16
     const item: ItemSpawn = { type: 'ability', ability, x, y: dropY }
-    const ring = this.add.circle(x, dropY, 20, 0x000000, 0)
-      .setStrokeStyle(2, ringColorMap[ability] ?? 0xffffff).setDepth(7)
     const img = this.add.image(x, dropY, texMap[ability]!).setDepth(8).setScale(0.12)
     img.setData('item', item)
-    img.setData('ring', ring)
-    this.tweens.add({ targets: [img, ring], y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
     this.collectibleSprites.push(img)
     this.time.delayedCall(10000, () => {
       if (!img.active) return
       this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
       this.tweens.add({
-        targets: [img, ring], alpha: 0, duration: 500,
-        onComplete: () => { if (img.active) img.destroy(); if (ring.active) ring.destroy() },
+        targets: img, alpha: 0, duration: 500,
+        onComplete: () => { if (img.active) img.destroy() },
       })
     })
   }
@@ -1535,12 +1532,83 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private useBackPortal() {
+    const ri: number = this.registry.get('runIndex') ?? 0
+    if (ri <= 0 || this.roomTransitioning) return
+    this.roomTransitioning = true
+    this.gm.pause()
+    this.physics.world.isPaused = true
+    this.registry.set('score', this.score)
+    this.registry.set('persistedAbilities', this.players.map(pl => ({ ability: pl.currentAbility, ammo: pl.abilityAmmo })))
+    this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
+    this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive })))
+    this.registry.set('runIndex', ri - 1)
+    this.registry.set('entryDir', this.cfg.backPortalEntryDir ?? 'right')
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
+  }
+
+  private buildBackPortal() {
+    if (!this.cfg.backPortal) return
+    const { x, y } = this.cfg.backPortal
+    const cy = y - 106
+
+    const arch = this.add.graphics().setDepth(2)
+    arch.fillStyle(0x2a1a0e, 1)
+    arch.fillRoundedRect(x - 84, cy - 138, 168, 278, { tl: 72, tr: 72, bl: 0, br: 0 })
+    arch.fillStyle(0x150903, 1)
+    arch.fillRoundedRect(x - 74, cy - 130, 148, 264, { tl: 62, tr: 62, bl: 0, br: 0 })
+    this.add.rectangle(x, cy - 132, 22, 20, 0x3d2812).setDepth(2)
+    this.add.rectangle(x, cy - 132, 12, 12, 0x5a3c1e, 0.75).setDepth(2)
+
+    const panelTop = cy - 68
+    const panelBot = cy + 134
+    const panelH   = panelBot - panelTop
+    const wp = this.add.graphics().setDepth(2)
+    wp.fillStyle(0x6b3e1c, 1)
+    wp.fillRect(x - 72, panelTop, 70, panelH)
+    wp.fillStyle(0x6b3e1c, 1)
+    wp.fillRect(x + 2, panelTop, 70, panelH)
+    for (let row = 4; row < panelH; row += 10) {
+      const prominent = row % 30 === 0
+      wp.fillStyle(prominent ? 0x3d2010 : 0x4e2c14, prominent ? 0.55 : 0.25)
+      wp.fillRect(x - 72, panelTop + row, 70, prominent ? 3 : 2)
+      wp.fillRect(x + 2,  panelTop + row, 70, prominent ? 3 : 2)
+    }
+    wp.fillStyle(0x8a5530, 0.30)
+    wp.fillRect(x - 72, panelTop, 4, panelH)
+    wp.fillRect(x + 68, panelTop, 4, panelH)
+    this.add.rectangle(x, panelTop + panelH / 2, 4, panelH, 0x120804).setDepth(2)
+
+    const bandYs = [cy - 30, cy + 40, cy + 100]
+    bandYs.forEach(by => {
+      this.add.rectangle(x, by,     140, 7, 0x252525).setDepth(2)
+      this.add.rectangle(x, by - 1, 140, 3, 0x3c3c3c, 0.50).setDepth(2)
+      ;[x - 56, x - 28, x + 2, x + 30, x + 58].forEach(rx => {
+        this.add.circle(rx, by, 3, 0x2e2e2e).setDepth(2)
+        this.add.circle(rx, by, 1, 0x4c4c4c).setDepth(2)
+      })
+    })
+
+    ;[-30, 30].forEach(ox => {
+      this.add.circle(x + ox, cy + 38, 8, 0x8a6830).setDepth(2)
+      this.add.circle(x + ox, cy + 38, 5, 0x241508).setDepth(2)
+      this.add.circle(x + ox, cy + 46, 4, 0x8a6830).setDepth(2)
+    })
+
+    this.backPortalLbl = this.add.text(x, cy - 158, '↑ RETURN', {
+      fontSize: '9px', fontFamily: FONT, color: '#000000',
+    }).setOrigin(0.5).setDepth(11).setVisible(false)
+    this.backPortalPos = this.cfg.backPortal
+  }
+
   private wirePlayerUIEvents() {
     this.players.forEach((p, i) => {
       p.on('abilityChanged', (ability: AbilityType) => {
         const max = ABILITY_AMMO[ability]
         this.ui.initAbilityPips(i, max)
         this.ui.updateAmmo(i, max)
+        this.ui.updateAbilityIcon(i, ability)
       })
       p.on('abilityAmmoChanged', (ammo: number) => this.ui.updateAmmo(i, ammo))
     })
@@ -1705,6 +1773,13 @@ export class GameScene extends Phaser.Scene {
       })
     })
 
+    // Floor spikes — static, damage on contact
+    this.spikeFloorTiles.forEach(spike => {
+      this.players.forEach(p => {
+        this.physics.add.overlap(p, spike, () => { p.hitByEnemy() })
+      })
+    })
+
     this.physics.add.overlap(this.projectiles, this.platforms, (proj) => {
       ;(proj as Phaser.Physics.Arcade.Image).destroy()
     })
@@ -1753,28 +1828,32 @@ export class GameScene extends Phaser.Scene {
 
     this.tweens.add({ targets: gfx, alpha: 0, duration: 200, onComplete: () => gfx.destroy() })
 
-    this.enemies.forEach(e => {
-      if (!e.active) return
-      const dx = e.x - src.x, dy = Math.abs(e.y - src.y)
-      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
-        this.hitEnemy(e, src)
-        const eb = e.body as Phaser.Physics.Arcade.Body
-        eb.setVelocityX(dir * 620)
-        eb.setVelocityY(-300)
+    // Delay contact until the arc reaches peak extension (edge of swing animation)
+    this.time.delayedCall(150, () => {
+      if (!src.active) return
+      this.enemies.forEach(e => {
+        if (!e.active) return
+        const dx = e.x - src.x, dy = Math.abs(e.y - src.y)
+        if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
+          this.hitEnemy(e, src)
+          const eb = e.body as Phaser.Physics.Arcade.Body
+          eb.setVelocityX(dir * 900)
+          eb.setVelocityY(-420)
+        }
+      })
+      if (this.boss?.active) {
+        const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
+        if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
+          this.hitBoss(src)
+          const bb = this.boss.body as Phaser.Physics.Arcade.Body
+          bb.setVelocityX(dir * 300)
+        }
       }
-    })
-    if (this.boss?.active) {
-      const dx = this.boss.x - src.x, dy = Math.abs(this.boss.y - src.y)
-      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) {
-        this.hitBoss(src)
-        const bb = this.boss.body as Phaser.Physics.Arcade.Body
-        bb.setVelocityX(dir * 220)
-      }
-    }
-    this.destructibles.forEach(d => {
-      if (!d.active) return
-      const dx = d.x - src.x, dy = Math.abs(d.y - src.y)
-      if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) d.takeDamage(30, DamageType.Physical)
+      this.destructibles.forEach(d => {
+        if (!d.active) return
+        const dx = d.x - src.x, dy = Math.abs(d.y - src.y)
+        if (dir * dx > 0 && dir * dx <= RANGE && dy <= HEIGHT) d.takeDamage(30, DamageType.Physical)
+      })
     })
   }
 
@@ -2137,6 +2216,62 @@ export class GameScene extends Phaser.Scene {
     this.exitRoom('right')
   }
 
+  private showBossDefeatedOverlay() {
+    const { width, height } = this.scale
+    const cx = width / 2, cy = height / 2
+
+    const bg = this.add.rectangle(cx, cy, width, height, 0x000000, 0.72)
+      .setScrollFactor(0).setDepth(90)
+
+    const title = this.add.text(cx, cy - 110, 'BOSS DEFEATED!', {
+      fontSize: '28px', fontFamily: FONT, color: '#ffe066',
+      stroke: '#000000', strokeThickness: 8,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+
+    const sub = this.add.text(cx, cy - 55, 'What will you do?', {
+      fontSize: '11px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+
+    const makeBtn = (x: number, label: string, cb: () => void) => {
+      const btn = this.add.text(x, cy + 30, label, {
+        fontSize: '10px', fontFamily: FONT, color: '#ffffff',
+        stroke: '#000000', strokeThickness: 3,
+        backgroundColor: '#00000066', padding: { x: 16, y: 12 },
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(91)
+        .setInteractive({ useHandCursor: true })
+      btn.on('pointerover', () => btn.setColor('#ffe066'))
+      btn.on('pointerout',  () => btn.setColor('#ffffff'))
+      btn.on('pointerdown', cb)
+      return btn
+    }
+
+    const allElements = [bg, title, sub]
+
+    const btnContinue = makeBtn(cx - 130, 'CONTINUE\nEXPLORING', () => {
+      allElements.forEach(e => e.destroy())
+      btnContinue.destroy()
+      btnMenu.destroy()
+    })
+
+    const btnMenu = makeBtn(cx + 130, 'MAIN MENU', () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.registry.set('runRooms',           null)
+        this.registry.set('runIndex',           0)
+        this.registry.set('entryDir',           null)
+        this.registry.set('persistedAbilities', null)
+        this.registry.set('persistedHearts',    null)
+        this.registry.set('score',              0)
+        this.registry.set('dadDefeated',        false)
+        this.registry.set('momDefeated',        false)
+        this.scene.start('MenuScene')
+      })
+    })
+
+    this.tweens.add({ targets: [bg, title, sub, btnContinue, btnMenu], alpha: { from: 0, to: 1 }, duration: 400 })
+  }
+
   // ── input ─────────────────────────────────────────────────────────────────
 
   private handleKeyboard(p: Player, keys: Record<string, Phaser.Input.Keyboard.Key>) {
@@ -2204,6 +2339,10 @@ export class GameScene extends Phaser.Scene {
         if (button.index === 12 && this.bossPortalPos) {
           const nearPortal = Phaser.Math.Distance.Between(player.x, player.y, this.bossPortalPos.x, this.bossPortalPos.y) < 90
           if (nearPortal) this.winGame()
+        }
+        if (button.index === 12 && this.backPortalPos) {
+          const nearBack = Phaser.Math.Distance.Between(player.x, player.y, this.backPortalPos.x, this.backPortalPos.y) < 90
+          if (nearBack) this.useBackPortal()
         }
       },
     )
@@ -2409,20 +2548,17 @@ export class GameScene extends Phaser.Scene {
         this.backPortalLbl?.setVisible(nearBack)
         const jumpKey2 = this.playerKeysets.get(p.playerId)?.['jump']
         if (nearBack && (touchInteract || (jumpKey2 && Phaser.Input.Keyboard.JustDown(jumpKey2)))) {
-          const ri: number = this.registry.get('runIndex') ?? 0
-          if (ri > 0) {
-            this.roomTransitioning = true
-            this.gm.pause()
-            this.physics.world.isPaused = true
-            this.registry.set('score', this.score)
-            this.registry.set('persistedAbilities', this.players.map(pl => ({ ability: pl.currentAbility, ammo: pl.abilityAmmo })))
-            this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
-            this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive })))
-            this.registry.set('runIndex', ri - 1)
-            this.registry.set('entryDir', 'right')
-            this.cameras.main.fadeOut(400, 0, 0, 0)
-            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('GameScene'))
-          }
+          this.useBackPortal()
+        }
+      }
+
+      // Barrier exit — auto-transition when player walks into a wall that seals an exit.
+      // Uses one-sided x check: trigger fires once the player reaches or passes be.x
+      // (the wall stops them there), gated by a vertical band around be.y.
+      if (this.cfg.barrierExit && isLocalPlayer && p.isAlive && !this.roomTransitioning) {
+        const be = this.cfg.barrierExit
+        if (p.x >= be.x && Math.abs(p.y - be.y) < 300) {
+          this.useBackPortal()
         }
       }
 

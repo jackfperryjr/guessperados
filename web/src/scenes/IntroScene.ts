@@ -11,11 +11,11 @@ export class IntroScene extends Phaser.Scene {
   constructor() { super({ key: 'IntroScene' }) }
 
   preload() {
-    this.load.image('intro-jack',   'assets/jack.png')
+    this.load.image('intro-jack',   'assets/app_icons/jack.png')
     this.load.image('intro-carter', 'assets/gifs/carter.gif')
     this.load.image('intro-callum', 'assets/gifs/callum.gif')
     this.load.image('intro-conrad', 'assets/gifs/conrad.gif')
-    this.load.image('intro-splat',  'assets/splat.png')
+    this.load.image('intro-splat',  'assets/app_icons/splat.png')
   }
 
   create() {
