@@ -183,9 +183,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset-two',               'tileset/two/spritesheet.png')
     this.load.tilemapTiledJSON('world-map-three', 'tileset/three/map.json')
     this.load.image('tileset-three',             'tileset/three/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-four', 'tileset/four/map.json')
+    this.load.image('tileset-four',              'tileset/four/spritesheet.png')
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
-    this.load.audio('music-boss',     'assets/music/boss_dragon.mp3')
+    this.load.audio('music-boss',     'assets/music/boss_defeat.mp3')
     // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {
@@ -1106,6 +1108,7 @@ export class BootScene extends Phaser.Scene {
 
     // Level 3 mid — red/orange (core heat)
     this.genNebula('bg-nebula-red', [0x4a0000, 0x7f0000, 0x3d0000, 0x5a0000])
+
   }
 
   private genNebula(key: string, colors: number[]) {

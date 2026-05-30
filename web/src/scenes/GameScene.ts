@@ -230,7 +230,21 @@ export class GameScene extends Phaser.Scene {
     const cx = width / 2, cy = height / 2
     const W = this.cfg.worldWidth
 
-    if (this.cfg.worldMap) return  // tilemap layers serve as background
+    if (this.cfg.worldMap && !this.cfg.isOutdoor) return  // tilemap layers serve as background
+
+    // Outdoor rooms: smooth atmospheric gradient over the sky tiles
+    if (this.cfg.isOutdoor) {
+      const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
+      // fillGradientStyle gives a single-pass WebGL linear gradient — no banding
+      g.fillGradientStyle(
+        0x1a4e8c, 0x1a4e8c,   // top: dark midnight blue
+        0x4488bb, 0x4488bb,   // bottom: muted horizon blue
+        0.72, 0.72,            // top alpha — noticeably dark overhead
+        0.12, 0.12             // bottom alpha — fades toward horizon
+      )
+      g.fillRect(0, 0, width, height)
+      return
+    }
 
     if (this.cfg.roomImage) {
       this.add.image(W / 2, 360, this.cfg.roomImage)
@@ -275,6 +289,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Outside — sky, sea horizon, clouds, grassy terrain ───────────────────────
   // ── Great Hall — warm stone, pillars, torches, hanging banners ────────────────
   private buildSceneryHall(w: number) {
     this.buildWallFeatures(w)
@@ -773,12 +788,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.cfg.worldMap) {
       // ── Tilemap world: create Phaser tile layers, mark collision tiles ──────
-      const { key, tileKey, tilesetName, section } = this.cfg.worldMap
+      const { key, tileKey, tilesetName, section, renderOffset } = this.cfg.worldMap
       const map = this.make.tilemap({ key })
       const tileset = map.addTilesetImage(tilesetName, tileKey)!
-      const SCALE = section ? 720 / (section.rows * 32) : 1
-      const ox = section ? -(section.col * 32 * SCALE) : 0
-      const oy = section ? -(section.row * 32 * SCALE) : 0
+      const tileH = map.tileHeight   // 32 for castle maps, 16 for outside map
+      const SCALE = section ? 720 / (section.rows * tileH) : 1
+      const ox = (section ? -(section.col * tileH * SCALE) : 0) + (renderOffset?.x ?? 0)
+      const oy = (section ? -(section.row * tileH * SCALE) : 0) + (renderOffset?.y ?? 0)
 
       const mkLayer = (name: string, depth: number, collide = false) => {
         const layer = map.createLayer(name, tileset, ox, oy)
@@ -789,15 +805,16 @@ export class GameScene extends Phaser.Scene {
         return layer
       }
 
-      mkLayer('Background walls', -2)
-      const wallsLayer = mkLayer('Walls',           1, true)
-      const platLarge  = mkLayer('Platforms large', 1, true)
-      const platSmall  = mkLayer('Platform small',  1, true)
-      mkLayer('Banner', 5)
-      mkLayer('Windows', 3)
+      const ml = this.cfg.worldMapLayers
+      const bgName      = ml?.background ?? 'Background walls'
+      const solidNames  = ml?.solid      ?? ['Walls', 'Platforms large', 'Platform small']
+      const overlayNames = ml?.overlay   ?? ['Banner', 'Windows']
 
-      this.tilemapLayers = ([wallsLayer, platLarge, platSmall] as (Phaser.Tilemaps.TilemapLayer | null)[])
-        .filter((l): l is Phaser.Tilemaps.TilemapLayer => l !== null)
+      mkLayer(bgName, -2)
+      const solidLayers = solidNames.map((n: string) => mkLayer(n, 1, true))
+      overlayNames.forEach((n: string, i: number) => mkLayer(n, 3 + i * 2))
+
+      this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
 
       // Build explicit static bodies from tile data — guarantees collision even
       // when Phaser's built-in tilemap physics is unreliable at certain scales.
@@ -1139,6 +1156,126 @@ export class GameScene extends Phaser.Scene {
           fontSize: '9px', fontFamily: FONT, color: '#ffee88',
           stroke: '#000000', strokeThickness: 3,
         }).setOrigin(1, 0.5).setDepth(10)
+      }
+
+      // Outdoor rooms: paint every solid tile with detailed grass/dirt colours
+      if (this.cfg.isOutdoor && this.tilemapLayers.length > 0) {
+        const solidLayer = this.tilemapLayers[0]
+        const cols = solidLayer.layer.width
+        const rows = solidLayer.layer.height
+        const tw = Math.round(map.tileWidth  * SCALE)
+        const th = Math.round(map.tileHeight * SCALE)
+        const tileG = this.add.graphics().setDepth(2)
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const tile = solidLayer.getTileAt(c, r)
+            if (!tile || tile.index < 0) continue
+
+            const isSolid = (dr: number, dc: number) => {
+              const nr = r + dr, nc = c + dc
+              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return false
+              const t2 = solidLayer.getTileAt(nc, nr)
+              return t2 !== null && t2.index >= 0
+            }
+            const hasAbove = isSolid(-1, 0)
+            const fullyInner = hasAbove && isSolid(1, 0) && isSolid(0, -1) && isSolid(0, 1)
+
+            const wx = ox + c * tw
+            const wy = oy + r * th
+
+            // Deterministic per-tile seed for pebble placement
+            const seed = (c * 31 + r * 17) & 0xff
+            const px1 = (seed * 7) % (tw - 6) + 3
+            const py1 = (seed * 5) % (th - 16) + 8
+            const px2 = ((seed + 100) * 11) % (tw - 6) + 3
+            const py2 = ((seed + 50)  *  9) % (th - 16) + 8
+            const px3 = ((seed + 200) * 13) % (tw - 6) + 3
+            const py3 = ((seed + 25)  *  3) % (th - 16) + 8
+
+            if (!hasAbove) {
+              // ── Surface tile ─────────────────────────────────────────────
+              // Dirt starts at wy+9 so it shows through where grass dips up
+              tileG.fillStyle(0xa07848); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil
+              tileG.fillStyle(0x8b5e34); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
+              tileG.fillStyle(0x7a5028); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
+              tileG.fillStyle(0x6a4020); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
+
+              // World-aligned strata lines
+              tileG.fillStyle(0x4a2e0c)
+              const firstS = Math.ceil((wy + 15) / 8) * 8
+              for (let sy = firstS; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+              // Left-edge highlight and bottom shadow
+              tileG.fillStyle(0xb08050); tileG.fillRect(wx, wy + 15, 1, th - 15)
+              tileG.fillStyle(0x3e2010); tileG.fillRect(wx, wy + th - 2, tw, 2)
+
+              // Pebbles inside the dirt zone
+              tileG.fillStyle(0x4a2e0c)
+              tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
+              tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
+              tileG.fillStyle(0xc09060)
+              tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
+
+              // ── Grass cap — drawn on top of dirt ─────────────────────────
+              // Flat upper grass (chamfered corners at top)
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 2, wy,     tw - 4, 1)  // top row chamfered
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)  // 1px chamfer
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx,     wy + 2, tw, 2)       // full bright
+              tileG.fillStyle(0x4da840); tileG.fillRect(wx,     wy + 4, tw, 2)       // mid
+              tileG.fillStyle(0x3a7022); tileG.fillRect(wx,     wy + 6, tw, 3)       // dark
+
+              // Fluctuating grass-dirt boundary: draw transition in 4px column groups
+              // each group has ±2px height variation for a ragged natural edge
+              const numG = Math.ceil(tw / 4)
+              for (let gi = 0; gi < numG; gi++) {
+                const gx  = wx + gi * 4
+                const gw  = Math.min(4, tw - gi * 4)
+                const gseed = (c * 37 + r * 13 + gi * 7) & 0x7   // 0–7
+                const yVar  = (gseed % 5) - 2   // -2 … +2
+                tileG.fillStyle(0x2d5a18); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
+                tileG.fillStyle(0x4a6818); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
+              }
+              // Highlight sliver on top-left
+              tileG.fillStyle(0x78d85e); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
+
+            } else if (fullyInner) {
+              // ── Fully surrounded — deep dark earth ────────────────────────
+              tileG.fillStyle(0x3e2410); tileG.fillRect(wx, wy, tw, th)
+
+              tileG.fillStyle(0x2e1808)
+              const firstS2 = Math.ceil(wy / 8) * 8
+              for (let sy = firstS2; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+
+              tileG.fillStyle(0x4e3018)
+              tileG.fillRect(wx + px1, wy + py1, 2, 2)
+              tileG.fillRect(wx + px2, wy + py2, 2, 2)
+              tileG.fillStyle(0x2a1408)
+              tileG.fillRect(wx + px3, wy + py3, 1, 1)
+
+            } else {
+              // ── Partially exposed edge tile — medium-dark brown ───────────
+              tileG.fillStyle(0x6a4222); tileG.fillRect(wx, wy, tw, th)
+
+              tileG.fillStyle(0x4a2e0c)
+              const firstS3 = Math.ceil(wy / 8) * 8
+              for (let sy = firstS3; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+
+              tileG.fillStyle(0x3e2010)
+              tileG.fillRect(wx + px1, wy + py1, 2, 2)
+              tileG.fillRect(wx + px2, wy + py2, 2, 2)
+              tileG.fillStyle(0x8a6040)
+              tileG.fillRect(wx + px3, wy + py3, 1, 1)
+              // Left edge highlight
+              tileG.fillStyle(0x8a5530); tileG.fillRect(wx, wy, 1, th)
+            }
+          }
+        }
       }
 
       this.spawnSpikeBalls()
@@ -1568,7 +1705,7 @@ export class GameScene extends Phaser.Scene {
     const count: number  = this.registry.get('playerCount') ?? 1
     const remoteIds: number[] = this.registry.get('remotePlayers') ?? []
     const entryDir: ExitDir | null = this.registry.get('entryDir') ?? null
-    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : { x: 800, y: 620 }
+    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : (this.cfg.defaultSpawn ?? { x: 800, y: 620 })
 
     for (let i = 0; i < count; i++) {
       const p = new Player(this, pos.x + i * 60, pos.y, i)

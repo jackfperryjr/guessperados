@@ -71,12 +71,19 @@ export interface RoomConfig {
   bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
   spawnX?: number            // override default left-entry X for continuous world rooms
+  defaultSpawn?: { x: number; y: number }  // spawn position when entryDir is null
   starOrbSide?: 'left' | 'right'  // which corner the star-burst orb appears in
   starOrb?: { x: number; y: number }  // explicit star-burst orb position (overrides starOrbSide)
   roomImage?: string
   worldHeight?: number
-  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
+  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
   comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
+  isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
+  worldMapLayers?: {
+    background?: string   // decorative bg layer (depth -2, no collision)
+    solid?: string[]      // collision layers (depth 1)
+    overlay?: string[]    // decorative top layers (depth 3+)
+  }
   platforms: Platform[]
   slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
@@ -95,6 +102,7 @@ const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tileset
 const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
 const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
+const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion'  } as const
 const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
@@ -438,6 +446,33 @@ const BOSS_THREE_ROOM: RoomConfig = {
   items: [],
 }
 
+// ─── Level 4: Outside World ───────────────────────────────────────────────────
+// Map: tileset/four/map.json — 284×55 tiles at 32px = 9088×1760 world pixels
+// Layers: 'Sky' = decorative background, 'Walls' = player collision surfaces.
+
+const LEVEL4_WORLD_ROOM: RoomConfig = {
+  name: 'The Outside',
+  tileset: 'tile-castle',    // unused (worldMap renders tiles), satisfies type
+  bgFar:   'bg-stars',       // unused (worldMap handles background)
+  bgMid:   'bg-stars',       // unused
+  worldWidth:  284 * 32,     // 9088
+  worldHeight:  55 * 32,     // 1760
+  worldMap: { ...MAP_FOUR },
+  worldMapLayers: {
+    background: 'Sky',
+    solid:      ['Walls'],
+  },
+  isOutdoor: true,
+  defaultSpawn: { x: 238, y: 1600 },
+  exits: [],
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
 export const RUN_LENGTH = 6
 
 export function generateRun(): RoomConfig[] {
@@ -448,6 +483,7 @@ export function generateRun(): RoomConfig[] {
     LEVEL2_BOSS_ROOM,
     LEVEL3_WORLD_ROOM,
     BOSS_THREE_ROOM,
+    LEVEL4_WORLD_ROOM,
   ]
 }
 
