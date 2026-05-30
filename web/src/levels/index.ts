@@ -12,7 +12,7 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
+export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
@@ -232,7 +232,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 1280, right: 1280 },
   isBossRoom: true,
-  bossDefeatedKey: 'dragonDefeated',
+  bossDefeatedKey: 'skeletonKingDefeated',
   backPortal: { x: 562, y: 1280 },
   bossHp: 15,
   bossName: 'KING SKELETON',
@@ -262,7 +262,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
 // ─── Level 2: Main World ──────────────────────────────────────────────────────
 // Map: tileset/two/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
 // Player enters from the bottom-left (coming through dragon boss room right exit).
-// Boss portal is in the top-left area — leads to Dad's Lair.
+// Boss portal is in the top-left area — leads to Zombie King's Lair.
 
 const LEVEL2_WORLD_ROOM: RoomConfig = {
   name: 'The Forsaken Realm',
@@ -337,11 +337,11 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   ],
 }
 
-// ─── Level 2: Boss Room (Dad's Lair) ─────────────────────────────────────────
+// ─── Level 2: Boss Room (Zombie King's Lair) ──────────────────────────────────
 // Map: tileset/boss_two/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const LEVEL2_BOSS_ROOM: RoomConfig = {
-  name: "Dad's Lair",
+  name: "Zombie King's Lair",
   ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
@@ -349,7 +349,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 1952, right: 1952 },
   isBossRoom: true,
-  bossDefeatedKey: 'dadDefeated',
+  bossDefeatedKey: 'zombieKingDefeated',
   backPortal: { x: 2700, y: 1956 },
   leftExitForward: true,
   entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 400, y: 1948 } },
@@ -409,11 +409,11 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   items: [],
 }
 
-// ─── Level 3: Boss Room (Mom's Lair) ─────────────────────────────────────────
+// ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
 // Map: tileset/boss_three/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const BOSS_THREE_ROOM: RoomConfig = {
-  name: "Mom's Lair",
+  name: "Celery Man's Lair",
   ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
@@ -421,7 +421,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 640, right: 1952 },
   isBossRoom: true,
-  bossDefeatedKey: 'momDefeated',
+  bossDefeatedKey: 'celeryManDefeated',
   backPortal: { x: 866, y: 1948 },
   backPortalEntryDir: 'left',
   entrySpawns: { left: { x: 429, y: 1952 } },
@@ -474,6 +474,8 @@ const LEVEL4_WORLD_ROOM: RoomConfig = {
 }
 
 export const RUN_LENGTH = 6
+export const TOTAL_WORMS = 3
+export const TOTAL_ROLY_POLYS = 3
 
 export function generateRun(): RoomConfig[] {
   return [

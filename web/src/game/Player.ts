@@ -1,46 +1,34 @@
 import Phaser from 'phaser'
-import { AbilityType, DamageType } from '../types'
+import { DamageType } from '../types'
 import { BootScene } from '../scenes/BootScene'
 import { SoundManager } from '../audio/SoundManager'
 
 const MOVE_SPEED        = 350
 const JUMP_VELOCITY     = -520
 const FLOAT_GRAVITY     = -700
-const INHALE_RANGE      = 190
-const KILL_RANGE        = 60
-const PLAYER_CARRY_MS   = 2000
-const SPIT_VX           = 540
-const SPIT_VY           = -320
-
-export const ABILITY_AMMO: Record<AbilityType, number> = {
-  [AbilityType.None]:      0,
-  [AbilityType.Fire]:      10,
-  [AbilityType.Lightning]: 3,
-  [AbilityType.Ice]:       10,
-  [AbilityType.Bat]:       0,
-}
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   readonly playerId: number
+  readonly charKey:  string
 
   hearts        = 5
-  currentAbility: AbilityType = AbilityType.None
-  abilityAmmo   = 0
   isAlive       = true
-  isInhaled     = false
+  isInhaled     = false   // still used when another player spits this one
   speedMultiplier  = 1.0
   controlsReversed = false
   speedBoostActive       = false
   strengthBoostActive    = false
   invulnerabilityActive  = false
 
+  isTruck          = false
+  isTrex           = false
+  isTransforming   = false   // true during transform/untransform animation
+
   private hitCount        = 0
   private isFloating      = false
-  private isInhaling      = false
+  private isShielding     = false
   private invincible      = false
   private isMeleeing      = false
-  private isUsingAbility  = false
-  private inhaledObject: Phaser.Physics.Arcade.Sprite | null = null
   private animPrefix: string | null = null
   private rainbowTimer: Phaser.Time.TimerEvent | null = null
 
@@ -62,18 +50,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const textureKey = resolvedSheet ?? BootScene.getFallbackTexture(id)
     super(scene, x, y, textureKey)
     this.playerId = id
+    this.charKey  = charKey ?? ''
     this.animPrefix = resolvedPrefix
 
     scene.add.existing(this)
     scene.physics.add.existing(this)
 
-    this.setScale(1.3)  // 64px frame → ~110px display
+    this.setScale(1.3)
 
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(false)
     body.setSize(42, 60, false)
     body.setOffset(18, 0)
-
   }
 
   // ── movement ────────────────────────────────────────────────────────────────
@@ -165,115 +153,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setGravityY(this.isFloating ? FLOAT_GRAVITY * this.speedMultiplier : 0)
     if (body.blocked.down) this.isFloating = false
-
-    if (this.inhaledObject) {
-      this.inhaledObject.setPosition(this.x, this.y)
-    }
-
     this.updateAnimation()
   }
 
   private updateAnimation() {
     if (!this.animPrefix) return
+    if (this.isTruck || this.isTrex || this.isTransforming) return  // managed externally
     const body = this.body as Phaser.Physics.Arcade.Body
     const vx = Math.abs(body.velocity.x)
 
     let anim: string
-    if (this.isMeleeing)          anim = 'melee'
-    else if (this.isUsingAbility) anim = 'ability'
-    else if (this.hasInhaled)     anim = 'puffed'
-    else if (this.isInhaling)    anim = 'inhale'
-    else if (this.isFloating)    anim = 'float'
+    if (this.isMeleeing)       anim = 'melee'
+    else if (this.isShielding) anim = 'inhale'   // reuse inhale art for shield pose
+    else if (this.isFloating)  anim = 'float'
     else if (!body.blocked.down && body.velocity.y > 80) anim = 'fall'
     else if (!body.blocked.down) anim = 'jump'
-    else if (vx > 10)            anim = 'walk'
-    else                         anim = 'idle'
+    else if (vx > 10)          anim = 'walk'
+    else                       anim = 'idle'
 
     const key = `${this.animPrefix}-${anim}`
     if (this.anims.currentAnim?.key !== key) this.play(key, true)
   }
 
-  // ── inhale / spit ───────────────────────────────────────────────────────────
+  // ── shield ─────────────────────────────────────────────────────────────────
 
-  setInhaling(active: boolean) { this.isInhaling = active }
+  get shielding() { return this.isShielding }
 
-  get inhaling()   { return this.isInhaling }
-  get hasInhaled() { return this.inhaledObject !== null }
-  inhaleRange()    { return INHALE_RANGE }
-  killRange()      { return KILL_RANGE }
+  setShielding(active: boolean) { this.isShielding = active }
 
-  swallowEnemy(ability: AbilityType) {
-    this.currentAbility = ability
-    this.abilityAmmo = ABILITY_AMMO[ability]
-    this.isInhaling = false
-    this.emit('abilityChanged', ability)
-  }
-
-  captureSpriteObject(obj: Phaser.Physics.Arcade.Sprite) {
-    if (this.inhaledObject) return
-    this.inhaledObject = obj
-    ;(obj.body as Phaser.Physics.Arcade.Body).setEnable(false)
-    obj.setVisible(false)
-    this.setScale(1.3, 1.0)
-    this.scene.time.delayedCall(PLAYER_CARRY_MS, () => this.spitObject())
-  }
-
-  capturePlayer(other: Player) {
-    if (this.inhaledObject || other.isInhaled || !other.isAlive) return
-    other.isInhaled = true
-    ;(other.body as Phaser.Physics.Arcade.Body).setEnable(false)
-    other.setVisible(false)
-    this.inhaledObject = other as unknown as Phaser.Physics.Arcade.Sprite
-    this.isInhaling = false
-    this.setScale(1.3, 1.0)
-    this.scene.time.delayedCall(PLAYER_CARRY_MS, () => this.spitObject())
-  }
-
-  spitObject() {
-    if (!this.inhaledObject) return
-    const obj = this.inhaledObject
-    this.inhaledObject = null
-    this.setScale(1)
-
-    if ((obj as unknown as Player).isInhaled !== undefined) {
-      const other = obj as unknown as Player
-      other.isInhaled = false
-      other.setVisible(true)
-      other.setPosition(this.x + (this.flipX ? -50 : 50), this.y)
-      ;(other.body as Phaser.Physics.Arcade.Body).setEnable(true)
-      ;(other.body as Phaser.Physics.Arcade.Body).setVelocity(
-        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY,
-      )
-    } else {
-      obj.setVisible(true)
-      obj.setPosition(this.x + (this.flipX ? -50 : 50), this.y)
-      ;(obj.body as Phaser.Physics.Arcade.Body).setEnable(true)
-      ;(obj.body as Phaser.Physics.Arcade.Body).setVelocity(
-        this.flipX ? -SPIT_VX : SPIT_VX, SPIT_VY,
-      )
-      this.emit('objectSpit', obj)
-    }
-
-    this.isInhaling = false
-  }
-
-  // ── abilities ───────────────────────────────────────────────────────────────
-
-  useAbility() {
-    if (this.currentAbility === AbilityType.None) return
-    const ability = this.currentAbility
-    this.emit('useAbility', ability, this)
-    this.isUsingAbility = true
-    this.scene.time.delayedCall(350, () => { if (this.active) this.isUsingAbility = false })
-    this.abilityAmmo--
-    if (this.abilityAmmo <= 0) {
-      this.currentAbility = AbilityType.None
-      this.abilityAmmo = 0
-      this.emit('abilityChanged', AbilityType.None)
-    } else {
-      this.emit('abilityAmmoChanged', this.abilityAmmo)
-    }
-  }
+  // ── actions ─────────────────────────────────────────────────────────────────
 
   swingMelee() {
     if (this.isMeleeing || !this.isAlive || this.isInhaled) return
@@ -282,10 +190,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.scene.time.delayedCall(350, () => { if (this.active) this.isMeleeing = false })
   }
 
+  useCharacterAbility() {
+    if (!this.isAlive || this.isInhaled) return
+    this.emit('useCharacterAbility', this)
+  }
+
   // ── damage ──────────────────────────────────────────────────────────────────
 
   hitByEnemy() {
-    if (this.invincible || this.invulnerabilityActive || !this.isAlive) return
+    if (this.invincible || this.invulnerabilityActive || this.isShielding || this.isTruck || !this.isAlive) return
     SoundManager.playerHit()
 
     this.hitCount++
@@ -321,7 +234,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   die() {
-    if (this.inhaledObject) this.spitObject()
     this.rainbowTimer?.remove()
     this.rainbowTimer = null
     SoundManager.playerDeath()

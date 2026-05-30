@@ -90,8 +90,8 @@ export class TouchControls {
     if (this.jumpHeld) player.jump()
     else player.jumpReleased()
 
-    player.setInhaling(this.inhaleHeld)
-    if (this.abilityJust) { player.useAbility(); this.abilityJust = false }
+    player.setShielding(this.inhaleHeld)
+    if (this.abilityJust) { player.useCharacterAbility(); this.abilityJust = false }
     if (this.meleeJust)   { player.swingMelee(); this.meleeJust = false }
   }
 

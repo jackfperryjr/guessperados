@@ -26,6 +26,7 @@ export class MenuScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale
 
+    this.cameras.main.fadeIn(400, 0, 0, 0)
     this.add.image(width / 2, height / 2, 'logo').setDisplaySize(width, height)
 
     this.gpCursor = this.add.text(0, 0, '►', {

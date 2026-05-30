@@ -110,32 +110,42 @@ export class VictoryScene extends Phaser.Scene {
 
     btnMenu.on('pointerdown', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.registry.set('runRooms',         null)
-        this.registry.set('runIndex',         0)
-        this.registry.set('entryDir',         null)
-        this.registry.set('persistedAbilities', null)
-        this.registry.set('persistedHearts',  null)
-        this.registry.set('score',            0)
-        this.registry.set('dadDefeated',      false)
-        this.registry.set('momDefeated',      false)
+      this.time.delayedCall(450, () => {
+        this.registry.set('runRooms',              null)
+        this.registry.set('runIndex',              0)
+        this.registry.set('entryDir',              null)
+        this.registry.set('persistedAbilities',    null)
+        this.registry.set('persistedHearts',       null)
+        this.registry.set('score',                 0)
+        this.registry.set('skeletonKingDefeated',  false)
+        this.registry.set('zombieKingDefeated',    false)
+        this.registry.set('celeryManDefeated',     false)
+        this.registry.set('dadSaved',              false)
+        this.registry.set('momSaved',              false)
+        this.registry.set('wormCount',             0)
+        this.registry.set('rolyPolyCount',         0)
         this.scene.start('MenuScene')
       })
     })
 
     btnContinue.on('pointerdown', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0)
-      this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.time.delayedCall(450, () => {
         const rooms = generateRun()
         this.registry.set('runRooms',         rooms)
-        this.registry.set('runIndex',         5)   // BOSS_THREE_ROOM = Mom's Lair
+        this.registry.set('runIndex',         5)   // BOSS_THREE_ROOM = Celery Man's Lair
         this.registry.set('entryDir',         'left')
         this.registry.set('persistedAbilities', null)
         this.registry.set('persistedHearts',  null)
         this.registry.set('lives',            3)
         this.registry.set('score',            0)
-        this.registry.set('dadDefeated',      true)
-        this.registry.set('momDefeated',      true)
+        this.registry.set('skeletonKingDefeated', true)
+        this.registry.set('zombieKingDefeated',   true)
+        this.registry.set('celeryManDefeated',    true)
+        this.registry.set('dadSaved',             true)
+        this.registry.set('momSaved',             true)
+        this.registry.set('wormCount',            0)
+        this.registry.set('rolyPolyCount',        0)
         this.scene.start('GameScene')
       })
     })
