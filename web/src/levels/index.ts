@@ -12,7 +12,7 @@ export interface DestructibleSpawn {
 }
 export interface CrateSpawn  { x: number; y: number }
 
-export type ItemType = 'heart' | 'life' | 'ability' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
+export type ItemType = 'heart' | 'life' | 'mystery' | 'speed' | 'attack-boost' | 'pizza' | 'worm' | 'roly-poly' | 'invulnerability'
 export interface ItemSpawn {
   x: number; y: number
   type: ItemType
@@ -71,12 +71,19 @@ export interface RoomConfig {
   bossRightBarrierY?: number              // override center-y for the right-exit barrier
   entrySpawns?: Partial<Record<ExitDir, { x: number; y: number }>>  // per-direction spawn overrides
   spawnX?: number            // override default left-entry X for continuous world rooms
+  defaultSpawn?: { x: number; y: number }  // spawn position when entryDir is null
   starOrbSide?: 'left' | 'right'  // which corner the star-burst orb appears in
   starOrb?: { x: number; y: number }  // explicit star-burst orb position (overrides starOrbSide)
   roomImage?: string
   worldHeight?: number
-  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number } }
+  worldMap?: { key: string; tileKey: string; tilesetName: string; section?: { col: number; row: number; cols: number; rows: number }; renderOffset?: { x: number; y: number } }
   comingSoonGlowRight?: boolean  // white-yellow glow at right exit with "COMING SOON!" label
+  isOutdoor?: boolean            // use outdoor sky/cloud backgrounds and scenery
+  worldMapLayers?: {
+    background?: string   // decorative bg layer (depth -2, no collision)
+    solid?: string[]      // collision layers (depth 1)
+    overlay?: string[]    // decorative top layers (depth 3+)
+  }
   platforms: Platform[]
   slopes?: SlopeConfig[]
   enemies: EnemySpawn[]
@@ -95,6 +102,7 @@ const BOSS_MAP  = { key: 'boss-map-one',   tileKey: 'boss-tileset-one',  tileset
 const MAP_TWO   = { key: 'world-map-two',  tileKey: 'tileset-two',       tilesetName: 'spritefusion' } as const
 const BOSS_MAP_TWO   = { key: 'boss-map-two',   tileKey: 'boss-tileset-two',   tilesetName: 'spritefusion' } as const
 const MAP_THREE      = { key: 'world-map-three', tileKey: 'tileset-three',      tilesetName: 'spritefusion' } as const
+const MAP_FOUR       = { key: 'world-map-four',  tileKey: 'tileset-four',        tilesetName: 'spritefusion'  } as const
 const BOSS_MAP_THREE = { key: 'boss-map-three',  tileKey: 'boss-tileset-three', tilesetName: 'spritefusion' } as const
 
 // ─── Main World (full tilemap, camera follows player) ─────────────────────────
@@ -224,7 +232,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 1280, right: 1280 },
   isBossRoom: true,
-  bossDefeatedKey: 'dragonDefeated',
+  bossDefeatedKey: 'skeletonKingDefeated',
   backPortal: { x: 562, y: 1280 },
   bossHp: 15,
   bossName: 'KING SKELETON',
@@ -254,7 +262,7 @@ const BOSS_TILEMAP_ROOM: RoomConfig = {
 // ─── Level 2: Main World ──────────────────────────────────────────────────────
 // Map: tileset/two/map.json — 174×117 tiles at 32px = 5568×3744 world pixels
 // Player enters from the bottom-left (coming through dragon boss room right exit).
-// Boss portal is in the top-left area — leads to Dad's Lair.
+// Boss portal is in the top-left area — leads to Zombie King's Lair.
 
 const LEVEL2_WORLD_ROOM: RoomConfig = {
   name: 'The Forsaken Realm',
@@ -329,11 +337,11 @@ const LEVEL2_WORLD_ROOM: RoomConfig = {
   ],
 }
 
-// ─── Level 2: Boss Room (Dad's Lair) ─────────────────────────────────────────
+// ─── Level 2: Boss Room (Zombie King's Lair) ──────────────────────────────────
 // Map: tileset/boss_two/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const LEVEL2_BOSS_ROOM: RoomConfig = {
-  name: "Dad's Lair",
+  name: "Zombie King's Lair",
   ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
@@ -341,7 +349,7 @@ const LEVEL2_BOSS_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 1952, right: 1952 },
   isBossRoom: true,
-  bossDefeatedKey: 'dadDefeated',
+  bossDefeatedKey: 'zombieKingDefeated',
   backPortal: { x: 2700, y: 1956 },
   leftExitForward: true,
   entrySpawns: { left: { x: 2519, y: 1952 }, right: { x: 400, y: 1948 } },
@@ -401,11 +409,11 @@ const LEVEL3_WORLD_ROOM: RoomConfig = {
   items: [],
 }
 
-// ─── Level 3: Boss Room (Mom's Lair) ─────────────────────────────────────────
+// ─── Level 3: Boss Room (Celery Man's Lair) ───────────────────────────────────
 // Map: tileset/boss_three/map.json — 99×203 tiles at 32px = 3168×6496 world pixels
 
 const BOSS_THREE_ROOM: RoomConfig = {
-  name: "Mom's Lair",
+  name: "Celery Man's Lair",
   ...SANCTUM,
   worldWidth:  99 * 32,   // 3168
   worldHeight: 67 * 32,   // 2144 — tile content ends at row 66
@@ -413,7 +421,7 @@ const BOSS_THREE_ROOM: RoomConfig = {
   exits: ['left', 'right'],
   exitPositions: { left: 640, right: 1952 },
   isBossRoom: true,
-  bossDefeatedKey: 'momDefeated',
+  bossDefeatedKey: 'celeryManDefeated',
   backPortal: { x: 866, y: 1948 },
   backPortalEntryDir: 'left',
   entrySpawns: { left: { x: 429, y: 1952 } },
@@ -438,7 +446,36 @@ const BOSS_THREE_ROOM: RoomConfig = {
   items: [],
 }
 
+// ─── Level 4: Outside World ───────────────────────────────────────────────────
+// Map: tileset/four/map.json — 284×55 tiles at 32px = 9088×1760 world pixels
+// Layers: 'Sky' = decorative background, 'Walls' = player collision surfaces.
+
+const LEVEL4_WORLD_ROOM: RoomConfig = {
+  name: 'The Outside',
+  tileset: 'tile-castle',    // unused (worldMap renders tiles), satisfies type
+  bgFar:   'bg-stars',       // unused (worldMap handles background)
+  bgMid:   'bg-stars',       // unused
+  worldWidth:  284 * 32,     // 9088
+  worldHeight:  55 * 32,     // 1760
+  worldMap: { ...MAP_FOUR },
+  worldMapLayers: {
+    background: 'Sky',
+    solid:      ['Walls'],
+  },
+  isOutdoor: true,
+  defaultSpawn: { x: 238, y: 1600 },
+  exits: [],
+  platforms: [],
+  enemies: [],
+  destructibles: [],
+  furnitureSpawns: [],
+  crates: [],
+  items: [],
+}
+
 export const RUN_LENGTH = 6
+export const TOTAL_WORMS = 3
+export const TOTAL_ROLY_POLYS = 3
 
 export function generateRun(): RoomConfig[] {
   return [
@@ -448,6 +485,7 @@ export function generateRun(): RoomConfig[] {
     LEVEL2_BOSS_ROOM,
     LEVEL3_WORLD_ROOM,
     BOSS_THREE_ROOM,
+    LEVEL4_WORLD_ROOM,
   ]
 }
 

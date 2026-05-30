@@ -169,6 +169,13 @@ export class BootScene extends Phaser.Scene {
     this.load.image('item-pizza',     'assets/items/pizza.png')
     this.load.image('item-worm',      'assets/npcs/worm.png')
     this.load.image('item-roly-poly', 'assets/npcs/roly_poly.png')
+    this.load.spritesheet('npc-mom', 'assets/npcs/mom.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('npc-dad', 'assets/npcs/dad.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-eric-transformer', 'assets/players/eric_transformer.png', { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-army-truck',       'assets/players/army_truck.png',       { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-shadow',           'assets/players/shadow.png',           { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-trex',                   'assets/players/trex.png',                   { frameWidth: 64, frameHeight: 64 })
+    this.load.spritesheet('sheet-scarlett-transformer',   'assets/players/scarlett_transform.png',     { frameWidth: 64, frameHeight: 64 })
     this.load.image('logo', 'assets/app_icons/friendsslay.jpg')
     this.load.image('icon-512', 'icons/icon-512.png')
     this.load.tilemapTiledJSON('world-map', 'tileset/one/map.json')
@@ -183,9 +190,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image('tileset-two',               'tileset/two/spritesheet.png')
     this.load.tilemapTiledJSON('world-map-three', 'tileset/three/map.json')
     this.load.image('tileset-three',             'tileset/three/spritesheet.png')
+    this.load.tilemapTiledJSON('world-map-four', 'tileset/four/map.json')
+    this.load.image('tileset-four',              'tileset/four/spritesheet.png')
     this.load.audio('music-title',    'assets/music/title_menu.mp3')
     this.load.audio('music-gameplay', 'assets/music/gameplay_loop.mp3')
-    this.load.audio('music-boss',     'assets/music/boss_dragon.mp3')
+    this.load.audio('music-boss',     'assets/music/boss_defeat.mp3')
     // Boss victory cutscene images — {char}_{boss}.jpg in assets/players/
     const CUTSCENE_CHARS = ['abby', 'callum', 'carter', 'coco', 'conrad', 'eric', 'scarlett']
     for (const char of CUTSCENE_CHARS) {
@@ -206,6 +215,11 @@ export class BootScene extends Phaser.Scene {
     this.genInteriorBackgrounds()
     this.setupAnimations()
     this.setupEnemyAnimations()
+    this.setupEricTransformerAnimations()
+    this.setupConradTruckAnimations()
+    this.setupCocoShadowAnimations()
+    this.setupScarlettTRexAnimations()
+    this.setupScarlettTransformAnimations()
     this.scene.start('IntroScene')
   }
 
@@ -241,6 +255,114 @@ export class BootScene extends Phaser.Scene {
         frameRate: 4, repeat: -1,
       })
     }
+  }
+
+  private setupCocoShadowAnimations() {
+    const key = 'sheet-shadow'
+    if (!this.textures.exists(key)) return
+    this.anims.create({
+      key: 'shadow-walk',
+      frames: this.anims.generateFrameNumbers(key, { frames: [14, 15, 0, 1, 2] }),
+      frameRate: 8, repeat: -1,
+    })
+    this.anims.create({
+      key: 'shadow-idle',
+      frames: this.anims.generateFrameNumbers(key, { frames: [5] }),
+      frameRate: 1, repeat: -1,
+    })
+    this.anims.create({
+      key: 'shadow-spin-up',
+      frames: this.anims.generateFrameNumbers(key, { start: 6, end: 8 }),
+      frameRate: 12, repeat: 0,
+    })
+    this.anims.create({
+      key: 'shadow-charge',
+      frames: this.anims.generateFrameNumbers(key, { start: 8, end: 11 }),
+      frameRate: 12, repeat: -1,
+    })
+    this.anims.create({
+      key: 'shadow-spin-down',
+      frames: this.anims.generateFrameNumbers(key, { start: 12, end: 15 }),
+      frameRate: 10, repeat: 0,
+    })
+  }
+
+  private setupScarlettTransformAnimations() {
+    const key = 'sheet-scarlett-transformer'
+    if (!this.textures.exists(key)) return
+    const total = this.textures.get(key).frameTotal - 1  // minus __BASE
+    const fwd = Array.from({ length: total }, (_, i) => i).filter(i => i !== 8)
+    const rev = [...fwd].reverse()
+    this.anims.create({
+      key: 'scarlett-anim-transform',
+      frames: this.anims.generateFrameNumbers(key, { frames: fwd }),
+      frameRate: 10, repeat: 0,
+    })
+    this.anims.create({
+      key: 'scarlett-anim-untransform',
+      frames: this.anims.generateFrameNumbers(key, { frames: rev }),
+      frameRate: 10, repeat: 0,
+    })
+  }
+
+  private setupScarlettTRexAnimations() {
+    const key = 'sheet-trex'
+    if (!this.textures.exists(key)) return
+    this.anims.create({
+      key: 'trex-walk',
+      frames: this.anims.generateFrameNumbers(key, { start: 0, end: -1 }),
+      frameRate: 10, repeat: -1,
+    })
+    this.anims.create({
+      key: 'trex-idle',
+      frames: this.anims.generateFrameNumbers(key, { frames: [0] }),
+      frameRate: 1, repeat: -1,
+    })
+  }
+
+  private setupConradTruckAnimations() {
+    const key = 'sheet-army-truck'
+    if (!this.textures.exists(key)) return
+    this.anims.create({
+      key: 'army-truck-move',
+      frames: this.anims.generateFrameNumbers(key, { start: 0, end: 5 }),
+      frameRate: 10, repeat: -1,
+    })
+    this.anims.create({
+      key: 'army-truck-idle',
+      frames: this.anims.generateFrameNumbers(key, { frames: [0] }),
+      frameRate: 1, repeat: -1,
+    })
+  }
+
+  private setupEricTransformerAnimations() {
+    const key = 'sheet-eric-transformer'
+    if (!this.textures.exists(key)) return
+
+    // frames 0-9 (skip 10 & 11) — transform into truck
+    this.anims.create({
+      key: 'eric-anim-transform',
+      frames: this.anims.generateFrameNumbers(key, { frames: [0,1,2,3,4,5,6,7,8,9] }),
+      frameRate: 10, repeat: 0,
+    })
+    // frames 9-0 in reverse — transform back into Eric
+    this.anims.create({
+      key: 'eric-anim-untransform',
+      frames: this.anims.generateFrameNumbers(key, { frames: [9,8,7,6,5,4,3,2,1,0] }),
+      frameRate: 10, repeat: 0,
+    })
+    // frames 12-15 — truck driving loop
+    this.anims.create({
+      key: 'eric-anim-truck-move',
+      frames: this.anims.generateFrameNumbers(key, { start: 12, end: 15 }),
+      frameRate: 10, repeat: -1,
+    })
+    // single frame — truck idle
+    this.anims.create({
+      key: 'eric-anim-truck-idle',
+      frames: this.anims.generateFrameNumbers(key, { frames: [12] }),
+      frameRate: 1, repeat: -1,
+    })
   }
 
   // Expose config for Player to read
@@ -1106,6 +1228,7 @@ export class BootScene extends Phaser.Scene {
 
     // Level 3 mid — red/orange (core heat)
     this.genNebula('bg-nebula-red', [0x4a0000, 0x7f0000, 0x3d0000, 0x5a0000])
+
   }
 
   private genNebula(key: string, colors: number[]) {

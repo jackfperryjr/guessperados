@@ -3,18 +3,19 @@ import { Player } from '../game/Player'
 import { Enemy } from '../game/Enemy'
 import { Boss } from '../game/Boss'
 import { Destructible } from '../game/Destructible'
+import { CarterDuplicate } from '../game/CarterDuplicate'
+import { ConradArmyTruck } from '../game/ConradArmyTruck'
+import { CocoShadow } from '../game/CocoShadow'
 import { GameManager } from '../game/GameManager'
 import { UIManager } from '../ui/UIManager'
 import { TouchControls } from '../ui/TouchControls'
-import { RoomConfig, ExitDir, generateRun } from '../levels'
+import { RoomConfig, ExitDir, generateRun, TOTAL_WORMS, TOTAL_ROLY_POLYS } from '../levels'
 import { AbilityType, DamageType } from '../types'
 import { ItemSpawn } from '../levels'
-import { ABILITY_AMMO } from '../game/Player'
 import { NetworkManager, RemoteInput } from '../network/NetworkManager'
 import { SoundManager } from '../audio/SoundManager'
 
 const FONT = '"Press Start 2P", monospace'
-const INHALE_PULL_SPEED = 400
 const SCORE_ENEMY = 200
 const SCORE_DESTRUCT = 100
 
@@ -83,8 +84,19 @@ export class GameScene extends Phaser.Scene {
   private pauseCursor: Phaser.GameObjects.Text | null = null
 
   private collectibleSprites: Phaser.GameObjects.Image[] = []
-  private inhaleGraphics: Phaser.GameObjects.Graphics[] = []
+  private shieldGraphics: Phaser.GameObjects.Graphics[] = []
   private tilemapLayers: Phaser.Tilemaps.TilemapLayer[] = []
+  private carterDuplicates: CarterDuplicate[] = []
+  private conradTrucks: ConradArmyTruck[] = []
+  private cocoShadow: CocoShadow | null = null
+  private callumNumbers: { obj: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text; emitter: Phaser.GameObjects.Particles.ParticleEmitter }[] = []
+
+  private dadNpcSprite:   Phaser.GameObjects.Image | null = null
+  private dadCageGfx:     Phaser.GameObjects.Graphics | null = null
+  private dadCageBubble:  Phaser.GameObjects.Container | null = null
+  private momNpcSprite:   Phaser.GameObjects.Image | null = null
+  private momCageGfx:     Phaser.GameObjects.Graphics | null = null
+  private momCageBubble:  Phaser.GameObjects.Container | null = null
 
   private playerKeysets = new Map<number, Record<string, Phaser.Input.Keyboard.Key>>()
   private touchControls: TouchControls | null = null
@@ -101,7 +113,7 @@ export class GameScene extends Phaser.Scene {
 
   init() {
     this.players = []; this.enemies = []; this.destructibles = []
-    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.inhaleGraphics = []
+    this.crates = []; this.bgLayers = []; this.collectibleSprites = []; this.shieldGraphics = []; this.carterDuplicates = []; this.conradTrucks = []; this.cocoShadow = null; this.callumNumbers = []
     this.tilemapLayers = []; this.spikeBalls = []; this.spikeFloorTiles = []
     this.playerKeysets.clear(); this.touchControls = null
     this.remoteInputs.clear()
@@ -126,6 +138,12 @@ export class GameScene extends Phaser.Scene {
     this.pauseCursor = null
     this._lastPadConnected = false
     this._debugLogTimer = 0
+    this.dadNpcSprite  = null
+    this.dadCageGfx    = null
+    this.dadCageBubble = null
+    this.momNpcSprite  = null
+    this.momCageGfx    = null
+    this.momCageBubble = null
   }
 
   create() {
@@ -191,6 +209,7 @@ export class GameScene extends Phaser.Scene {
     this.wirePlayerUIEvents()
     this.ui.updateWormCount(this.registry.get('wormCount') ?? 0)
     this.ui.updateRolyPolyCount(this.registry.get('rolyPolyCount') ?? 0)
+    this.buildNPCs()
     this.buildPauseMenu()
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause())
     this.cameras.main.fadeIn(400, 0, 0, 0)
@@ -230,7 +249,21 @@ export class GameScene extends Phaser.Scene {
     const cx = width / 2, cy = height / 2
     const W = this.cfg.worldWidth
 
-    if (this.cfg.worldMap) return  // tilemap layers serve as background
+    if (this.cfg.worldMap && !this.cfg.isOutdoor) return  // tilemap layers serve as background
+
+    // Outdoor rooms: smooth atmospheric gradient over the sky tiles
+    if (this.cfg.isOutdoor) {
+      const g = this.add.graphics().setScrollFactor(0).setDepth(-1)
+      // fillGradientStyle gives a single-pass WebGL linear gradient — no banding
+      g.fillGradientStyle(
+        0x1a4e8c, 0x1a4e8c,   // top: dark midnight blue
+        0x4488bb, 0x4488bb,   // bottom: muted horizon blue
+        0.72, 0.72,            // top alpha — noticeably dark overhead
+        0.12, 0.12             // bottom alpha — fades toward horizon
+      )
+      g.fillRect(0, 0, width, height)
+      return
+    }
 
     if (this.cfg.roomImage) {
       this.add.image(W / 2, 360, this.cfg.roomImage)
@@ -275,6 +308,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Outside — sky, sea horizon, clouds, grassy terrain ───────────────────────
   // ── Great Hall — warm stone, pillars, torches, hanging banners ────────────────
   private buildSceneryHall(w: number) {
     this.buildWallFeatures(w)
@@ -630,11 +664,6 @@ export class GameScene extends Phaser.Scene {
 
     for (const item of this.cfg.items) {
       if (isInsideWall(item.x, item.y)) continue
-      const abilityTex: Partial<Record<AbilityType, string>> = {
-        [AbilityType.Fire]:     'fire_ability',
-        [AbilityType.Lightning]: 'lightning_ability',
-        [AbilityType.Ice]:      'ice_ability',
-      }
       const tex = item.type === 'heart'            ? 'item-heart'
                 : item.type === 'pizza'            ? 'item-pizza'
                 : item.type === 'worm'             ? 'item-worm'
@@ -642,11 +671,10 @@ export class GameScene extends Phaser.Scene {
                 : item.type === 'life'             ? 'item-life'
                 : item.type === 'mystery'          ? 'item-mystery'
                 : item.type === 'invulnerability'  ? 'invulnerability_icon'
-                : item.type === 'ability'          ? (abilityTex[item.ability ?? AbilityType.None] ?? 'item-orb')
                 : 'item-orb'
       const isHidden = item.type === 'speed' || item.type === 'attack-boost' || item.type === 'invulnerability'
       const img = this.add.image(item.x, item.y, tex).setDepth(8)
-        .setScale(item.type === 'mystery' ? 2.2 : item.type === 'ability' ? 0.12
+        .setScale(item.type === 'mystery' ? 2.2
           : item.type === 'worm' || item.type === 'roly-poly' ? 1.0 : 1.2)
       if (isHidden) img.setAlpha(0)
       img.setData('item', item)
@@ -668,13 +696,6 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('lives', lives)
       this.showPopup(item.x, item.y, '1-UP!', '#ffe066')
       SoundManager.collectLife()
-    } else if (item.type === 'ability') {
-      const ab = item.ability ?? AbilityType.None
-      player.currentAbility = ab
-      player.abilityAmmo = ABILITY_AMMO[ab]
-      player.emit('abilityChanged', ab)
-      this.showPopup(item.x, item.y, AbilityType[ab].toUpperCase() + '!', '#aaffaa')
-      SoundManager.collectAbility()
     } else if (item.type === 'mystery') {
       this.triggerMysteryEffect(player)
       SoundManager.collectMystery()
@@ -714,12 +735,8 @@ export class GameScene extends Phaser.Scene {
         player.hearts = Math.min(5, player.hearts + 1)
         this.showPopup(player.x, player.y - 32, '+ HEART!', '#ff4d6a')
       } else if (r === 1) {
-        const abilities = [AbilityType.Fire, AbilityType.Lightning, AbilityType.Ice]
-        const ability = abilities[Math.floor(Math.random() * abilities.length)]
-        player.currentAbility = ability
-        player.abilityAmmo = ABILITY_AMMO[ability]
-        player.emit('abilityChanged', ability)
-        this.showPopup(player.x, player.y - 32, AbilityType[ability] + '!', '#aaffaa')
+        player.applyStrengthBoost(false)
+        this.showPopup(player.x, player.y - 32, 'POWER UP!', '#ff4444')
       } else {
         player.applyTempEffect('fast', 5000)
         this.showPopup(player.x, player.y - 32, 'SPEED UP!', '#ffe066')
@@ -763,6 +780,226 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  // ── NPC helpers ─────────────────────────────────────────────────────────────
+
+  private showNpcBubble(
+    x: number, y: number,
+    lines: string[],
+    duration: number | null,
+  ): Phaser.GameObjects.Container {
+    const FONT_SIZE = 8
+    const PADDING   = 10
+    const LINE_H    = 14
+
+    const texts = lines.map((line, i) =>
+      this.add.text(0, i * LINE_H, line, {
+        fontSize: `${FONT_SIZE}px`, fontFamily: FONT, color: '#111111',
+      }).setDepth(2).setOrigin(0, 0),
+    )
+
+    const maxW  = Math.max(...texts.map(t => t.width))
+    const boxW  = maxW + PADDING * 2
+    const boxH  = lines.length * LINE_H + PADDING * 2 - (LINE_H - FONT_SIZE)
+
+    texts.forEach((t, i) => t.setPosition(-maxW / 2, -boxH / 2 + PADDING + i * LINE_H))
+
+    const bg   = this.add.rectangle(0, 0, boxW, boxH, 0xfffde7, 0.97)
+      .setStrokeStyle(2, 0x444444).setDepth(2)
+    const tail = this.add.triangle(0, boxH / 2 + 1, -6, 0, 6, 0, 0, 10, 0xfffde7, 0.97)
+      .setDepth(2)
+
+    const ctr = this.add.container(x, y, [bg, tail, ...texts]).setDepth(2)
+
+    if (duration !== null) {
+      this.time.delayedCall(duration, () => {
+        if (!ctr.active) return
+        this.tweens.add({ targets: ctr, alpha: 0, duration: 500, onComplete: () => { if (ctr.active) ctr.destroy() } })
+      })
+    }
+    return ctr
+  }
+
+  private drawCage(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
+    const g   = this.add.graphics().setDepth(2)
+    const hw  = w / 2
+    const hh  = h / 2
+    const BAR = 4
+    const N   = 5
+    g.fillStyle(0x5a5a7a, 1)
+    g.fillRect(x - hw, y - hh, w, BAR)
+    g.fillRect(x - hw, y + hh - BAR, w, BAR)
+    for (let i = 0; i <= N; i++) {
+      const bx = x - hw + i * (w / N)
+      g.fillRect(bx - BAR / 2, y - hh, BAR, h)
+    }
+    return g
+  }
+
+  private npcCharNames(): string {
+    const chars: string[] = this.registry.get('selectedChars') ?? ['friend']
+    const names = chars.map(k => k.charAt(0).toUpperCase() + k.slice(1))
+    return names.length === 1 ? names[0] : names.slice(0, -1).join(' & ') + ' & ' + names[names.length - 1]
+  }
+
+  // ── NPC spawn system ─────────────────────────────────────────────────────────
+
+  private buildNPCs() {
+    const runIndex: number = this.registry.get('runIndex') ?? 0
+    const dk = this.cfg.bossDefeatedKey
+    if (runIndex === 0 && !this.cfg.isBossRoom) this.buildWorldOneNPCs()
+    else if (dk === 'skeletonKingDefeated') this.buildSkeletonKingNPCs()
+    else if (dk === 'zombieKingDefeated') this.buildZombieKingNPCs()
+    else if (dk === 'celeryManDefeated') this.buildCeleryManNPCs()
+  }
+
+  private buildWorldOneNPCs() {
+    this.add.image(602, 892, 'sheet-enemy-duck', 11).setDepth(2).setScale(1.5).setFlipX(true)
+    this.showNpcBubble(602, 808, [
+      'Collect ALL worms &',
+      'roly polies to save',
+      'Mom & Dad before the',
+      'final boss!',
+    ], null)
+  }
+
+  private buildSkeletonKingNPCs() {
+    if (this.registry.get('dadSaved')) return
+
+    this.dadNpcSprite  = this.add.image(633, 796, 'npc-dad', 14).setDepth(2).setScale(1.5)
+    this.dadCageGfx    = this.drawCage(633, 796, 80, 100)
+    this.dadCageBubble = this.showNpcBubble(633, 710, ['Help me!'], null)
+    this.checkDadFreed()
+  }
+
+  private buildZombieKingNPCs() {
+    if (this.registry.get('momSaved')) return
+
+    this.momNpcSprite  = this.add.image(542, 1084, 'npc-mom', 12).setDepth(2).setScale(1.5)
+    this.momCageGfx    = this.drawCage(542, 1084, 80, 100)
+    this.momCageBubble = this.showNpcBubble(542, 998, ['Help me!'], null)
+    this.checkMomFreed()
+  }
+
+  private buildCeleryManNPCs() {
+    const dadSaved = !!(this.registry.get('dadSaved'))
+    const momSaved = !!(this.registry.get('momSaved'))
+    const npcX = 700, npcY = 1900
+
+    if (dadSaved && momSaved) {
+      const dadImg = this.add.image(npcX - 35, npcY, 'npc-dad', 8).setDepth(2).setScale(1.5)
+      const momImg = this.add.image(npcX + 35, npcY, 'npc-mom', 15).setDepth(2).setScale(1.5)
+
+      this.showNpcBubble(npcX, npcY - 100, [
+        `You saved us, ${this.npcCharNames()}!`,
+        'Take our power and',
+        'defeat Celery Man!',
+      ], 6000)
+
+      // Grant boosts after a short delay so players are settled
+      this.time.delayedCall(800, () => {
+        this.players.forEach(p => {
+          if (!p.invulnerabilityActive) p.applyInvulnerability(true)
+          if (!p.speedBoostActive)      p.applySpeedBoost(true)
+          if (!p.strengthBoostActive)   p.applyStrengthBoost(true)
+        })
+      })
+
+      this.time.delayedCall(6500, () => {
+        if (!dadImg.active) return
+        this.tweens.add({
+          targets: [dadImg, momImg], alpha: 0, duration: 800,
+          onComplete: () => { dadImg.destroy(); momImg.destroy() },
+        })
+      })
+    } else {
+      this.add.image(npcX, npcY, 'sheet-enemy-duck', 11).setDepth(2).setScale(1.5).setFlipX(true)
+      this.showNpcBubble(npcX, npcY - 90, [
+        'You cannot defeat',
+        'Celery Man without',
+        'saving Mom & Dad first!',
+      ], null)
+    }
+  }
+
+  // ── parent freed logic ───────────────────────────────────────────────────────
+
+  private checkDadFreed(): boolean {
+    if (this.registry.get('dadSaved')) return true
+    const bossBeaten = !!(this.registry.get('skeletonKingDefeated'))
+    const wormsOk    = (this.registry.get('wormCount') ?? 0) >= TOTAL_WORMS
+    if (bossBeaten && wormsOk) { this.freeDad(); return true }
+    return false
+  }
+
+  private checkMomFreed(): boolean {
+    if (this.registry.get('momSaved')) return true
+    const bossBeaten = !!(this.registry.get('zombieKingDefeated'))
+    const rolysOk    = (this.registry.get('rolyPolyCount') ?? 0) >= TOTAL_ROLY_POLYS
+    if (bossBeaten && rolysOk) { this.freeMom(); return true }
+    return false
+  }
+
+  private freeDad() {
+    if (!this.dadNpcSprite?.active) return
+    this.registry.set('dadSaved', true)
+
+    this.dadCageGfx?.destroy()
+    this.dadCageGfx = null
+    this.dadCageBubble?.destroy()
+    this.dadCageBubble = null
+    this.dadNpcSprite.setFrame(11)
+
+    const momSaved = !!(this.registry.get('momSaved'))
+    const dadBubble = this.showNpcBubble(this.dadNpcSprite.x, this.dadNpcSprite.y - 100, [
+      `Thank you, ${this.npcCharNames()}!`,
+      momSaved ? "I'll have something" : 'Now hurry and',
+      momSaved ? 'special waiting!'    : 'save Mom!',
+    ], null)
+
+    this.time.delayedCall(30000, () => {
+      if (!this.dadNpcSprite?.active) return
+      this.tweens.add({
+        targets: [this.dadNpcSprite, dadBubble], alpha: 0, duration: 1500,
+        onComplete: () => { this.dadNpcSprite?.destroy(); this.dadNpcSprite = null; dadBubble.destroy() },
+      })
+    })
+  }
+
+  private freeMom() {
+    if (!this.momNpcSprite?.active) return
+    this.registry.set('momSaved', true)
+
+    this.momCageGfx?.destroy()
+    this.momCageGfx = null
+    this.momCageBubble?.destroy()
+    this.momCageBubble = null
+    this.momNpcSprite.setFrame(15)
+
+    const dadSaved = !!(this.registry.get('dadSaved'))
+    const momBubble = this.showNpcBubble(this.momNpcSprite.x, this.momNpcSprite.y - 100, [
+      `Thank you, ${this.npcCharNames()}!`,
+      dadSaved ? "I'll have something" : 'Now hurry and',
+      dadSaved ? 'special waiting!'    : 'save Dad!',
+    ], null)
+
+    this.time.delayedCall(30000, () => {
+      if (!this.momNpcSprite?.active) return
+      this.tweens.add({
+        targets: [this.momNpcSprite, momBubble], alpha: 0, duration: 1500,
+        onComplete: () => { this.momNpcSprite?.destroy(); this.momNpcSprite = null; momBubble.destroy() },
+      })
+    })
+  }
+
+  private showCagedParentHint(parent: 'dad' | 'mom') {
+    const sprite     = parent === 'dad' ? this.dadNpcSprite : this.momNpcSprite
+    const collectible = parent === 'dad' ? 'worms' : 'roly polies'
+    if (!sprite?.active) return
+    this.showNpcBubble(sprite.x, sprite.y - 100, [
+      `Collect all the ${collectible}`, 'to free me!',
+    ], 4500)
+  }
+
   // ── level ───────────────────────────────────────────────────────────────────
 
   private buildLevel() {
@@ -773,12 +1010,13 @@ export class GameScene extends Phaser.Scene {
 
     if (this.cfg.worldMap) {
       // ── Tilemap world: create Phaser tile layers, mark collision tiles ──────
-      const { key, tileKey, tilesetName, section } = this.cfg.worldMap
+      const { key, tileKey, tilesetName, section, renderOffset } = this.cfg.worldMap
       const map = this.make.tilemap({ key })
       const tileset = map.addTilesetImage(tilesetName, tileKey)!
-      const SCALE = section ? 720 / (section.rows * 32) : 1
-      const ox = section ? -(section.col * 32 * SCALE) : 0
-      const oy = section ? -(section.row * 32 * SCALE) : 0
+      const tileH = map.tileHeight   // 32 for castle maps, 16 for outside map
+      const SCALE = section ? 720 / (section.rows * tileH) : 1
+      const ox = (section ? -(section.col * tileH * SCALE) : 0) + (renderOffset?.x ?? 0)
+      const oy = (section ? -(section.row * tileH * SCALE) : 0) + (renderOffset?.y ?? 0)
 
       const mkLayer = (name: string, depth: number, collide = false) => {
         const layer = map.createLayer(name, tileset, ox, oy)
@@ -789,15 +1027,16 @@ export class GameScene extends Phaser.Scene {
         return layer
       }
 
-      mkLayer('Background walls', -2)
-      const wallsLayer = mkLayer('Walls',           1, true)
-      const platLarge  = mkLayer('Platforms large', 1, true)
-      const platSmall  = mkLayer('Platform small',  1, true)
-      mkLayer('Banner', 5)
-      mkLayer('Windows', 3)
+      const ml = this.cfg.worldMapLayers
+      const bgName      = ml?.background ?? 'Background walls'
+      const solidNames  = ml?.solid      ?? ['Walls', 'Platforms large', 'Platform small']
+      const overlayNames = ml?.overlay   ?? ['Banner', 'Windows']
 
-      this.tilemapLayers = ([wallsLayer, platLarge, platSmall] as (Phaser.Tilemaps.TilemapLayer | null)[])
-        .filter((l): l is Phaser.Tilemaps.TilemapLayer => l !== null)
+      mkLayer(bgName, -2)
+      const solidLayers = solidNames.map((n: string) => mkLayer(n, 1, true))
+      overlayNames.forEach((n: string, i: number) => mkLayer(n, 3 + i * 2))
+
+      this.tilemapLayers = solidLayers.filter((l: Phaser.Tilemaps.TilemapLayer | null): l is Phaser.Tilemaps.TilemapLayer => l !== null)
 
       // Build explicit static bodies from tile data — guarantees collision even
       // when Phaser's built-in tilemap physics is unreliable at certain scales.
@@ -906,8 +1145,14 @@ export class GameScene extends Phaser.Scene {
             const runRooms: RoomConfig[] = this.registry.get('runRooms') ?? []
             const runIndex: number       = this.registry.get('runIndex') ?? 0
             const dk = this.cfg.bossDefeatedKey
-            const hasCutscene = dk === 'dragonDefeated' || dk === 'dadDefeated'
-            const cutsceneSuffix = dk === 'dragonDefeated' ? 'skeleton_king' : 'zombie_king'
+            if (dk === 'skeletonKingDefeated') {
+              if (!this.checkDadFreed()) this.showCagedParentHint('dad')
+            } else if (dk === 'zombieKingDefeated') {
+              if (!this.checkMomFreed()) this.showCagedParentHint('mom')
+            }
+
+            const hasCutscene = dk === 'skeletonKingDefeated' || dk === 'zombieKingDefeated'
+            const cutsceneSuffix = dk === 'skeletonKingDefeated' ? 'skeleton_king' : 'zombie_king'
 
             if (hasCutscene) {
               // Show cutscene immediately — it handles its own music
@@ -1139,6 +1384,126 @@ export class GameScene extends Phaser.Scene {
           fontSize: '9px', fontFamily: FONT, color: '#ffee88',
           stroke: '#000000', strokeThickness: 3,
         }).setOrigin(1, 0.5).setDepth(10)
+      }
+
+      // Outdoor rooms: paint every solid tile with detailed grass/dirt colours
+      if (this.cfg.isOutdoor && this.tilemapLayers.length > 0) {
+        const solidLayer = this.tilemapLayers[0]
+        const cols = solidLayer.layer.width
+        const rows = solidLayer.layer.height
+        const tw = Math.round(map.tileWidth  * SCALE)
+        const th = Math.round(map.tileHeight * SCALE)
+        const tileG = this.add.graphics().setDepth(2)
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const tile = solidLayer.getTileAt(c, r)
+            if (!tile || tile.index < 0) continue
+
+            const isSolid = (dr: number, dc: number) => {
+              const nr = r + dr, nc = c + dc
+              if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) return false
+              const t2 = solidLayer.getTileAt(nc, nr)
+              return t2 !== null && t2.index >= 0
+            }
+            const hasAbove = isSolid(-1, 0)
+            const fullyInner = hasAbove && isSolid(1, 0) && isSolid(0, -1) && isSolid(0, 1)
+
+            const wx = ox + c * tw
+            const wy = oy + r * th
+
+            // Deterministic per-tile seed for pebble placement
+            const seed = (c * 31 + r * 17) & 0xff
+            const px1 = (seed * 7) % (tw - 6) + 3
+            const py1 = (seed * 5) % (th - 16) + 8
+            const px2 = ((seed + 100) * 11) % (tw - 6) + 3
+            const py2 = ((seed + 50)  *  9) % (th - 16) + 8
+            const px3 = ((seed + 200) * 13) % (tw - 6) + 3
+            const py3 = ((seed + 25)  *  3) % (th - 16) + 8
+
+            if (!hasAbove) {
+              // ── Surface tile ─────────────────────────────────────────────
+              // Dirt starts at wy+9 so it shows through where grass dips up
+              tileG.fillStyle(0xa07848); tileG.fillRect(wx, wy +  9, tw, 9)   // topsoil
+              tileG.fillStyle(0x8b5e34); tileG.fillRect(wx, wy + 18, tw, 7)   // upper dirt
+              tileG.fillStyle(0x7a5028); tileG.fillRect(wx, wy + 25, tw, 4)   // lower dirt
+              tileG.fillStyle(0x6a4020); tileG.fillRect(wx, wy + 29, tw, th - 29) // deep
+
+              // World-aligned strata lines
+              tileG.fillStyle(0x4a2e0c)
+              const firstS = Math.ceil((wy + 15) / 8) * 8
+              for (let sy = firstS; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+              // Left-edge highlight and bottom shadow
+              tileG.fillStyle(0xb08050); tileG.fillRect(wx, wy + 15, 1, th - 15)
+              tileG.fillStyle(0x3e2010); tileG.fillRect(wx, wy + th - 2, tw, 2)
+
+              // Pebbles inside the dirt zone
+              tileG.fillStyle(0x4a2e0c)
+              tileG.fillRect(wx + px1, wy + 16 + py1 % (th - 20), 2, 2)
+              tileG.fillRect(wx + px2, wy + 16 + py2 % (th - 20), 2, 2)
+              tileG.fillStyle(0xc09060)
+              tileG.fillRect(wx + px3, wy + 16 + py3 % (th - 20), 1, 1)
+
+              // ── Grass cap — drawn on top of dirt ─────────────────────────
+              // Flat upper grass (chamfered corners at top)
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 2, wy,     tw - 4, 1)  // top row chamfered
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx + 1, wy + 1, tw - 2, 1)  // 1px chamfer
+              tileG.fillStyle(0x5ec44a); tileG.fillRect(wx,     wy + 2, tw, 2)       // full bright
+              tileG.fillStyle(0x4da840); tileG.fillRect(wx,     wy + 4, tw, 2)       // mid
+              tileG.fillStyle(0x3a7022); tileG.fillRect(wx,     wy + 6, tw, 3)       // dark
+
+              // Fluctuating grass-dirt boundary: draw transition in 4px column groups
+              // each group has ±2px height variation for a ragged natural edge
+              const numG = Math.ceil(tw / 4)
+              for (let gi = 0; gi < numG; gi++) {
+                const gx  = wx + gi * 4
+                const gw  = Math.min(4, tw - gi * 4)
+                const gseed = (c * 37 + r * 13 + gi * 7) & 0x7   // 0–7
+                const yVar  = (gseed % 5) - 2   // -2 … +2
+                tileG.fillStyle(0x2d5a18); tileG.fillRect(gx, wy + 9  + yVar, gw, 2)
+                tileG.fillStyle(0x4a6818); tileG.fillRect(gx, wy + 11 + yVar, gw, 2)
+              }
+              // Highlight sliver on top-left
+              tileG.fillStyle(0x78d85e); tileG.fillRect(wx + 2, wy, Math.floor(tw * 0.35), 1)
+
+            } else if (fullyInner) {
+              // ── Fully surrounded — deep dark earth ────────────────────────
+              tileG.fillStyle(0x3e2410); tileG.fillRect(wx, wy, tw, th)
+
+              tileG.fillStyle(0x2e1808)
+              const firstS2 = Math.ceil(wy / 8) * 8
+              for (let sy = firstS2; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+
+              tileG.fillStyle(0x4e3018)
+              tileG.fillRect(wx + px1, wy + py1, 2, 2)
+              tileG.fillRect(wx + px2, wy + py2, 2, 2)
+              tileG.fillStyle(0x2a1408)
+              tileG.fillRect(wx + px3, wy + py3, 1, 1)
+
+            } else {
+              // ── Partially exposed edge tile — medium-dark brown ───────────
+              tileG.fillStyle(0x6a4222); tileG.fillRect(wx, wy, tw, th)
+
+              tileG.fillStyle(0x4a2e0c)
+              const firstS3 = Math.ceil(wy / 8) * 8
+              for (let sy = firstS3; sy < wy + th - 1; sy += 8) {
+                tileG.fillRect(wx + 2, sy, tw - 4, 1)
+              }
+
+              tileG.fillStyle(0x3e2010)
+              tileG.fillRect(wx + px1, wy + py1, 2, 2)
+              tileG.fillRect(wx + px2, wy + py2, 2, 2)
+              tileG.fillStyle(0x8a6040)
+              tileG.fillRect(wx + px3, wy + py3, 1, 1)
+              // Left edge highlight
+              tileG.fillStyle(0x8a5530); tileG.fillRect(wx, wy, 1, th)
+            }
+          }
+        }
       }
 
       this.spawnSpikeBalls()
@@ -1508,36 +1873,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnFurnitureDrop(x: number, y: number) {
-    const roll = Math.random()
-    const ability = roll < 0.4 ? AbilityType.None
-                  : roll < 0.6 ? AbilityType.Fire
-                  : roll < 0.8 ? AbilityType.Lightning
-                  : AbilityType.Ice
-
-    if (ability === AbilityType.None) {
-      this.spawnHeartDrop(x, y)
-      return
-    }
-
-    const texMap: Partial<Record<AbilityType, string>> = {
-      [AbilityType.Fire]:     'fire_ability',
-      [AbilityType.Lightning]: 'lightning_ability',
-      [AbilityType.Ice]:      'ice_ability',
-    }
-    const dropY = y - 16
-    const item: ItemSpawn = { type: 'ability', ability, x, y: dropY }
-    const img = this.add.image(x, dropY, texMap[ability]!).setDepth(8).setScale(0.12)
-    img.setData('item', item)
-    this.tweens.add({ targets: img, y: dropY - 12, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
-    this.collectibleSprites.push(img)
-    this.time.delayedCall(10000, () => {
-      if (!img.active) return
-      this.collectibleSprites = this.collectibleSprites.filter(s => s !== img)
-      this.tweens.add({
-        targets: img, alpha: 0, duration: 500,
-        onComplete: () => { if (img.active) img.destroy() },
-      })
-    })
+    this.spawnHeartDrop(x, y)
   }
 
   private spawnRoomFurnitureRandom() {
@@ -1568,12 +1904,11 @@ export class GameScene extends Phaser.Scene {
     const count: number  = this.registry.get('playerCount') ?? 1
     const remoteIds: number[] = this.registry.get('remotePlayers') ?? []
     const entryDir: ExitDir | null = this.registry.get('entryDir') ?? null
-    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : { x: 800, y: 620 }
+    const pos = entryDir ? getEntryPos(entryDir, this.cfg) : (this.cfg.defaultSpawn ?? { x: 800, y: 620 })
 
     for (let i = 0; i < count; i++) {
       const p = new Player(this, pos.x + i * 60, pos.y, i)
       p.setDepth(3)  // above background door (depth 1) so player stands in front
-      if (this.cfg.isBossRoom) { p.currentAbility = AbilityType.None; p.abilityAmmo = 0 }
       this.players.push(p)
 
       const isLocalPlayer = !remoteIds.includes(i)
@@ -1592,12 +1927,12 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      const coneGfx = this.add.graphics().setDepth(7)
-      this.inhaleGraphics.push(coneGfx)
+      const shieldGfx = this.add.graphics().setDepth(4)
+      this.shieldGraphics.push(shieldGfx)
 
       p.on('died', () => this.onPlayerDied(p))
-      p.on('useAbility', (ability: AbilityType, src: Player) => this.fireAbility(ability, src))
       p.on('useMelee', (src: Player) => this.doMeleeSwing(src))
+      p.on('useCharacterAbility', (src: Player) => this.handleCharacterAbility(src))
       p.on('heartLost', () => {})
     }
   }
@@ -1609,7 +1944,6 @@ export class GameScene extends Phaser.Scene {
     this.gm.pause()
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
-    this.registry.set('persistedAbilities', this.players.map(pl => ({ ability: pl.currentAbility, ammo: pl.abilityAmmo })))
     this.registry.set('persistedHearts',    this.players.map(pl => pl.hearts))
     this.registry.set('persistedBoosts',    this.players.map(pl => ({ speedBoostActive: pl.speedBoostActive, strengthBoostActive: pl.strengthBoostActive, invulnerabilityActive: pl.invulnerabilityActive })))
     this.registry.set('runIndex', ri - 1)
@@ -1673,29 +2007,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private wirePlayerUIEvents() {
-    this.players.forEach((p, i) => {
-      p.on('abilityChanged', (ability: AbilityType) => {
-        const max = ABILITY_AMMO[ability]
-        this.ui.initAbilityPips(i, max)
-        this.ui.updateAmmo(i, max)
-        this.ui.updateAbilityIcon(i, ability)
-      })
-      p.on('abilityAmmoChanged', (ammo: number) => this.ui.updateAmmo(i, ammo))
-    })
-
-    const persisted: { ability: AbilityType; ammo: number }[] | null = this.registry.get('persistedAbilities')
-    if (persisted) {
-      this.players.forEach((p, i) => {
-        const pa = persisted[i]
-        if (pa && pa.ability !== AbilityType.None && pa.ammo > 0) {
-          p.currentAbility = pa.ability
-          p.abilityAmmo = pa.ammo
-          p.emit('abilityChanged', pa.ability)
-          p.emit('abilityAmmoChanged', pa.ammo)
-        }
-      })
-    }
-
     const persistedHearts: number[] | null = this.registry.get('persistedHearts')
     if (persistedHearts) {
       this.players.forEach((p, i) => {
@@ -1722,8 +2033,6 @@ export class GameScene extends Phaser.Scene {
     if (idx === -1) return
     const p = this.players[idx]
     p.destroy()
-    const coneGfx = this.inhaleGraphics[idx]
-    if (coneGfx) { coneGfx.destroy(); this.inhaleGraphics.splice(idx, 1) }
     this.players.splice(idx, 1)
     this.playerKeysets.delete(id)
     this.remoteInputs.delete(id)
@@ -1800,15 +2109,13 @@ export class GameScene extends Phaser.Scene {
       if (!e.flying) this.physics.add.collider(e, this.platforms)
     })
 
-    // Player ↔ enemy group: swallow on contact while inhaling, damage otherwise
+    // Player ↔ enemy: truck runs them over (3× dmg = instant kill), otherwise player takes damage
     this.players.forEach(p => {
       this.physics.add.collider(p, this.enemyGroup, (_p, _e) => {
         const player = _p as Player
         const enemy  = _e as Enemy
-        if (player.inhaling && !player.hasInhaled) {
-          player.swallowEnemy(enemy.abilityType)
-          enemy.swallow()
-          this.enemies = this.enemies.filter(x => x !== enemy)
+        if (player.isTruck || player.isTrex) {
+          enemy.die()
           this.addScore(SCORE_ENEMY)
         } else {
           player.hitByEnemy()
@@ -1823,14 +2130,9 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.overlap(p, this.boss!, (_p, _b) => {
           const player = _p as Player
           const boss   = _b as unknown as Boss
-          // Only interact when vertically close (boss hovers far above floor)
           if (Math.abs(player.y - boss.y) > 350) return
-          if (player.inhaling && !player.hasInhaled) {
-            SoundManager.bossHit()
-            boss.hit()
-          } else {
-            player.hitByEnemy()
-          }
+          if (player.isTruck || player.isTrex) this.hitBoss(player)
+          else player.hitByEnemy()
         })
       })
     }
@@ -1939,6 +2241,9 @@ export class GameScene extends Phaser.Scene {
 
   private hitBoss(src: Player) {
     if (!this.boss?.active) return
+    if (this.cfg.bossDefeatedKey === 'celeryManDefeated') {
+      if (!this.registry.get('dadSaved') || !this.registry.get('momSaved')) return
+    }
     if (src.strengthBoostActive) {
       this.boss.emit('hpChanged', 0, this.boss.maxHp)
       this.boss.bossDie()
@@ -1947,92 +2252,599 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private fireAbility(ability: AbilityType, src: Player) {
-    switch (ability) {
-      case AbilityType.Fire:     this.spawnFireball(src);   break
-      case AbilityType.Lightning: this.lightningBurst(src);   break
-      case AbilityType.Ice:      this.iceBlast(src);        break
-    }
+  // ── Conrad army truck ability ─────────────────────────────────────────────────
+
+  private spawnConradTruck(src: Player) {
+    src.swingMelee()
+    if (!this.textures.exists('sheet-army-truck')) return
+    const truck = new ConradArmyTruck(this, src.x, src.y)
+    truck.setFlipX(src.flipX)
+    truck.setData('patrolDir', src.flipX ? -1 : 1)
+    this.conradTrucks.push(truck)
+    this.physics.add.collider(truck, this.platforms)
+    this.tilemapLayers.forEach(l => this.physics.add.collider(truck, l))
+    truck.on('fireShot',    (t: ConradArmyTruck) => this.fireConradTruckShot(t))
+    truck.on('truckExpired', (t: ConradArmyTruck) => {
+      this.conradTrucks = this.conradTrucks.filter(x => x !== t)
+    })
   }
 
-  private spawnFireball(src: Player) {
-    const dir = src.flipX ? -1 : 1
-    const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
-    const fb = this.physics.add.image(src.x + dir * 20, src.y, texKey)
-    this.projectiles.add(fb)
-    ;(fb.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 650).setGravityY(-800)
-    fb.setFlipX(dir < 0)
-    this.tweens.add({ targets: fb, angle: fb.angle + 360, duration: 450, repeat: -1 })
+  private updateConradTrucks() {
+    const RANGE = ConradArmyTruck.attackRange
+    const SPEED = ConradArmyTruck.moveSpeed
 
-    this.enemies.forEach(e => {
-      this.physics.add.overlap(fb, e, () => { this.hitEnemy(e, src); fb.destroy() })
-    })
-    this.destructibles.forEach(d => {
-      this.physics.add.overlap(fb, d, () => { d.takeDamage(50, DamageType.Fire); fb.destroy() })
-    })
-    if (this.boss?.active) {
-      this.physics.add.overlap(fb, this.boss, () => { this.hitBoss(src); fb.destroy() })
-    }
-    this.time.delayedCall(2200, () => { if (fb.active) fb.destroy() })
-  }
+    for (const truck of this.conradTrucks) {
+      if (!truck.active) continue
+      const body = truck.body as Phaser.Physics.Arcade.Body
 
+      // Find nearest target within attack range
+      let nearTarget: Phaser.GameObjects.Sprite | null = null
+      let nearDist = RANGE
 
-  private lightningBurst(src: Player) {
-    const dir = src.flipX ? -1 : 1
-    const boltLen = 900
-    const boltCx  = src.x + dir * boltLen / 2
-
-    const bolt = this.add.rectangle(boltCx, src.y - 4, boltLen, 10, 0xffee00, 0.95).setDepth(15)
-    const glow = this.add.rectangle(boltCx, src.y - 4, boltLen, 28, 0xffee00, 0.25).setDepth(14)
-    this.cameras.main.flash(100, 255, 240, 80, false)
-    this.tweens.add({ targets: [bolt, glow], alpha: 0, scaleY: 2, duration: 280,
-      onComplete: () => { bolt.destroy(); glow.destroy() } })
-
-    // Lightning instant-kills all enemies in the arc
-    this.enemies.forEach(e => {
-      if (!e.active) return
-      if (dir * (e.x - src.x) > 0 && Math.abs(e.y - src.y) < 80) {
-        e.die(); this.addScore(SCORE_ENEMY)
+      for (const e of this.enemies) {
+        if (!e.active) continue
+        const d = Phaser.Math.Distance.Between(truck.x, truck.y, e.x, e.y)
+        if (d < nearDist) { nearDist = d; nearTarget = e }
       }
-    })
-    if (this.boss?.active && dir * (this.boss.x - src.x) > 0 && Math.abs(this.boss.y - src.y) < 90) {
-      SoundManager.bossHit()
-      if (src.strengthBoostActive) {
-        this.hitBoss(src)
+      if (this.boss?.active) {
+        const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss.x, this.boss.y)
+        if (d < nearDist) { nearDist = d; nearTarget = this.boss }
+      }
+
+      const now      = this.time.now
+      const holdUntil: number = truck.getData('shootHold') ?? 0
+
+      if (nearTarget) {
+        // Enemy in range — stop, face them, shoot; lock in shoot state briefly to dampen oscillation
+        body.setVelocityX(0)
+        truck.isShooting = true
+        truck.setData('shootHold', now + 800)
+        truck.setFlipX(nearTarget.x < truck.x)
+      } else if (truck.isShooting && now < holdUntil) {
+        // Still within the shoot-hold window — stay put
+        body.setVelocityX(0)
       } else {
-        this.boss.hit()
-        // Two follow-up hits spaced past the boss's invincibility window
-        this.time.delayedCall(700,  () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
-        this.time.delayedCall(1400, () => { if (this.boss?.active) { SoundManager.bossHit(); this.boss!.hit() } })
+        // No nearby enemy — patrol back and forth
+        truck.isShooting = false
+        let dir: number = truck.getData('patrolDir') ?? 1
+
+        // Reverse when hitting a wall in the current travel direction
+        if ((dir > 0 && body.blocked.right) || (dir < 0 && body.blocked.left)) {
+          dir = -dir
+          truck.setData('patrolDir', dir)
+        }
+        body.setVelocityX(dir * SPEED)
+        truck.setFlipX(dir < 0)
       }
+
+      // Animation
+      const moving = Math.abs(body.velocity.x) > 10
+      const animKey = moving ? 'army-truck-move' : 'army-truck-idle'
+      if (truck.anims.currentAnim?.key !== animKey) truck.play(animKey, true)
     }
-    this.destructibles.forEach(d => {
-      if (dir * (d.x - src.x) > 0 && Math.abs(d.y - src.y) < 80) {
-        d.takeDamage(150, DamageType.Lightning)   // 3× fire's 50
-      }
-    })
   }
 
-  private iceBlast(src: Player) {
-    const dir = src.flipX ? -1 : 1
-    const texKey = this.textures.exists('proj-ice') ? 'proj-ice' : 'fireball'
-    const proj = this.physics.add.image(src.x + dir * 20, src.y, texKey)
+  private fireConradTruckShot(truck: ConradArmyTruck) {
+    if (!truck.active) return
+    let target: Phaser.GameObjects.Sprite | null = null
+    let best = ConradArmyTruck.attackRange
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(truck.x, truck.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(truck.x, truck.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (!target) return
+
+    const angle = Phaser.Math.Angle.Between(truck.x, truck.y - 10, target.x, target.y)
+    const texKey = this.textures.exists('proj-fire') ? 'proj-fire' : 'fireball'
+    const proj = this.physics.add.image(truck.x, truck.y - 10, texKey)
+    proj.setTint(0x44cc44)
     this.projectiles.add(proj)
-    ;(proj.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 600).setGravityY(-800)
-    if (texKey === 'fireball') proj.setTint(0x66ccff).setScale(1.15)
-    proj.setFlipX(dir < 0)
-    this.tweens.add({ targets: proj, angle: proj.angle + 360, duration: 600, repeat: -1 })
+    ;(proj.body as Phaser.Physics.Arcade.Body)
+      .setVelocity(Math.cos(angle) * 520, Math.sin(angle) * 520)
+      .setGravityY(-800)
 
     this.enemies.forEach(e => {
-      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, src); proj.destroy() })
-    })
-    this.destructibles.forEach(d => {
-      this.physics.add.overlap(proj, d, () => { d.takeDamage(50, DamageType.Physical); proj.destroy() })
+      this.physics.add.overlap(proj, e, () => { this.hitEnemy(e, this.players[0]); proj.destroy() })
     })
     if (this.boss?.active) {
-      this.physics.add.overlap(proj, this.boss, () => { this.hitBoss(src); proj.destroy() })
+      this.physics.add.overlap(proj, this.boss, () => {
+        if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+            (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+        SoundManager.bossHit()
+        this.boss!.hit()
+        proj.destroy()
+      })
     }
     this.time.delayedCall(2200, () => { if (proj.active) proj.destroy() })
+  }
+
+  // ── Coco shadow ability ───────────────────────────────────────────────────────
+
+  private handleCocoShadow(coco: Player) {
+    if (this.cocoShadow?.active) {
+      this.cocoShadow.release()
+    } else {
+      this.spawnCocoShadow(coco)
+    }
+  }
+
+  private spawnCocoShadow(coco: Player) {
+    if (!this.textures.exists('sheet-shadow')) return
+    const shadow = new CocoShadow(this, coco.x, coco.y)
+    this.cocoShadow = shadow
+
+    this.physics.add.collider(shadow, this.platforms)
+    this.tilemapLayers.forEach(l => this.physics.add.collider(shadow, l))
+
+    // When shadow is ready to charge, set its velocity toward the target
+    shadow.on('startCharge', (_s: CocoShadow, target: Phaser.GameObjects.Sprite) => {
+      if (!shadow.active) return
+      const body = shadow.body as Phaser.Physics.Arcade.Body
+      const flying = (target as Enemy).flying ?? false
+      if (flying) {
+        const angle = Phaser.Math.Angle.Between(shadow.x, shadow.y, target.x, target.y)
+        body.setAllowGravity(false)
+        body.setVelocity(
+          Math.cos(angle) * CocoShadow.chargeSpeed,
+          Math.sin(angle) * CocoShadow.chargeSpeed,
+        )
+      } else {
+        const dir = target.x >= shadow.x ? 1 : -1
+        body.setAllowGravity(false)
+        body.setVelocity(dir * CocoShadow.chargeSpeed, 0)
+        shadow.setFlipX(dir < 0)
+      }
+    })
+
+    // Enemy collider while charging — 3× damage = instant kill, then spin-down
+    this.enemies.forEach(e => {
+      this.physics.add.overlap(shadow, e, () => {
+        if (shadow.shadowState !== 'charging') return
+        e.die()
+        this.addScore(SCORE_ENEMY)
+        shadow.hitEnemy()
+        ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
+      })
+    })
+    if (this.boss?.active) {
+      this.physics.add.overlap(shadow, this.boss, () => {
+        if (shadow.shadowState !== 'charging') return
+        if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+            (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+        SoundManager.bossHit()
+        this.boss!.hit()
+        shadow.hitEnemy()
+        ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
+      })
+    }
+
+    shadow.on('shadowReleased', () => { this.cocoShadow = null })
+  }
+
+  private shadowHasLineOfSight(ax: number, ay: number, bx: number, by: number): boolean {
+    if (this.tilemapLayers.length === 0) return true
+    const STEPS = 14
+    for (let i = 1; i < STEPS; i++) {
+      const t = i / STEPS
+      const x = ax + (bx - ax) * t
+      const y = ay + (by - ay) * t
+      for (const layer of this.tilemapLayers) {
+        const tile = layer.getTileAtWorldXY(x, y)
+        if (tile && tile.index >= 0) return false
+      }
+    }
+    return true
+  }
+
+  private updateCocoShadow() {
+    const shadow = this.cocoShadow
+    if (!shadow?.active) return
+
+    // Find Coco (the player who owns the shadow)
+    const coco = this.players.find(p => p.charKey === 'coco' && p.isAlive)
+
+    if (shadow.shadowState === 'idle') {
+      // Re-enable gravity in case a flying charge just finished
+      ;(shadow.body as Phaser.Physics.Arcade.Body).setAllowGravity(true)
+
+      // Follow Coco
+      if (coco) {
+        const cocoBody   = coco.body as Phaser.Physics.Arcade.Body
+        const shadowBody = shadow.body as Phaser.Physics.Arcade.Body
+
+        // Jump when Coco jumps (Coco going up and Shadow still grounded)
+        if (cocoBody.velocity.y < -300 && shadowBody.blocked.down) {
+          shadowBody.setVelocityY(cocoBody.velocity.y)
+        }
+
+        const targetX = coco.x + (coco.flipX ? 60 : -60)
+        const dx = targetX - shadow.x
+        if (Math.abs(dx) > 12) {
+          const dir = dx > 0 ? 1 : -1
+          shadowBody.setVelocityX(dir * 350)
+          shadow.setFlipX(dir < 0)
+        } else {
+          shadowBody.setVelocityX(0)
+        }
+      }
+
+      // Scan for nearest enemy to trigger spin-dash
+      let nearTarget: Phaser.GameObjects.Sprite | null = null
+      let nearDist = CocoShadow.detectRange
+
+      for (const e of this.enemies) {
+        if (!e.active) continue
+        const d = Phaser.Math.Distance.Between(shadow.x, shadow.y, e.x, e.y)
+        if (d < nearDist && this.shadowHasLineOfSight(shadow.x, shadow.y, e.x, e.y)) {
+          nearDist = d; nearTarget = e
+        }
+      }
+      if (this.boss?.active) {
+        const d = Phaser.Math.Distance.Between(shadow.x, shadow.y, this.boss.x, this.boss.y)
+        if (d < nearDist && this.shadowHasLineOfSight(shadow.x, shadow.y, this.boss.x, this.boss.y)) {
+          nearDist = d; nearTarget = this.boss
+        }
+      }
+
+      if (nearTarget) {
+        // Begin moving toward the target in a straight line as the spin-up winds up
+        const dir = nearTarget.x >= shadow.x ? 1 : -1
+        ;(shadow.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 350)
+        shadow.setFlipX(dir < 0)
+        shadow.beginSpinUp(nearTarget)
+      } else {
+        // Walk or idle animation — only while truly idle (no spin-up in progress)
+        const shadowBody = shadow.body as Phaser.Physics.Arcade.Body
+        const moving  = Math.abs(shadowBody.velocity.x) > 10
+        const animKey = moving ? 'shadow-charge' : 'shadow-idle'
+        if (shadow.anims.currentAnim?.key !== animKey) shadow.play(animKey, true)
+      }
+    }
+  }
+
+  // ── Callum number ability ─────────────────────────────────────────────────────
+
+  private spawnCallumNumber(src: Player) {
+    src.swingMelee()
+
+    const value = Phaser.Math.Between(1, 10)
+    const palette = ['#ff6666','#ffdd44','#44ff88','#44ccff','#ff88ff',
+                     '#ff9944','#aaffff','#ffffff','#ffaacc','#aaffaa']
+    const color = palette[value - 1]
+
+    // Gradient glow shadow behind the number
+    const glow = this.add.text(src.x, src.y - 20, `${value}`, {
+      fontSize: '80px', fontFamily: FONT, color: '#ffffff',
+      stroke: '#ffffff', strokeThickness: 14,
+    }).setOrigin(0.5).setDepth(11).setAlpha(0.45)
+    glow.setTint(0xaa00ff, 0x0088ff, 0xff0077, 0xffaa00)
+    this.tweens.add({ targets: glow, alpha: 0.15, duration: 550, yoyo: true, repeat: -1, ease: 'Sine.InOut' })
+
+    const num = this.add.text(src.x, src.y - 20, `${value}`, {
+      fontSize: '72px', fontFamily: FONT, color,
+      stroke: '#000000', strokeThickness: 8,
+    }).setOrigin(0.5).setDepth(12)
+
+    this.physics.add.existing(num)
+    const body = num.body as Phaser.Physics.Arcade.Body
+    body.setAllowGravity(false)
+    body.setBounce(1, 1)
+    body.setCollideWorldBounds(true)
+    this.physics.add.collider(num, this.platforms)
+    this.tilemapLayers.forEach(l => this.physics.add.collider(num, l))
+
+    const emitter = this.add.particles(num.x, num.y, '__DEFAULT', {
+      lifespan: { min: 400, max: 800 },
+      speed: { min: 20, max: 70 },
+      scale: { start: 0.3, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: [0xffd700, 0xffffff, 0xccaaff, 0x88ddff, 0xff99aa],
+      quantity: 1,
+      frequency: 80,
+      blendMode: 'ADD',
+    }).setDepth(13)
+
+    // Find nearest target
+    let target: Phaser.GameObjects.Sprite | null = null
+    let best = Infinity
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(src.x, src.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(src.x, src.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+
+    if (target) {
+      const angle = Phaser.Math.Angle.Between(num.x, num.y, target.x, target.y)
+      body.setVelocity(Math.cos(angle) * 420, Math.sin(angle) * 420)
+
+      let didHit = false
+      const onHit = () => {
+        if (!num.active || didHit) return
+        didHit = true
+        if (target === this.boss) {
+          if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+              (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+          SoundManager.bossHit()
+          this.boss!.hit()
+        } else {
+          SoundManager.enemyHit()
+          ;(target as Enemy).hit()
+          this.addScore(SCORE_ENEMY)
+        }
+        emitter.destroy()
+        if (glow.active) glow.destroy()
+        this.tweens.add({
+          targets: num, alpha: 0, scaleX: 1.6, scaleY: 1.6,
+          duration: 180, onComplete: () => { if (num.active) num.destroy() },
+        })
+      }
+
+      for (const e of this.enemies) {
+        if (e === target) { this.physics.add.overlap(num, e, onHit); break }
+      }
+      if (target === this.boss && this.boss?.active) {
+        this.physics.add.overlap(num, this.boss, onHit)
+      }
+    }
+
+    this.time.delayedCall(7000, () => {
+      if (!num.active) return
+      emitter.destroy()
+      if (glow.active) glow.destroy()
+      this.tweens.add({ targets: num, alpha: 0, duration: 300, onComplete: () => { if (num.active) num.destroy() } })
+    })
+
+    this.callumNumbers.push({ obj: num, glow, emitter })
+  }
+
+  private updateCallumNumbers() {
+    this.callumNumbers = this.callumNumbers.filter(n => n.obj.active)
+    for (const n of this.callumNumbers) {
+      n.emitter.setPosition(n.obj.x, n.obj.y)
+      if (n.glow.active) n.glow.setPosition(n.obj.x, n.obj.y)
+    }
+  }
+
+  // ── Abby star ability ─────────────────────────────────────────────────────────
+
+  private spawnAbbyStars(src: Player) {
+    src.swingMelee()
+    // Gather all live targets sorted by distance
+    const allTargets = [
+      ...this.enemies.filter(e => e.active),
+      ...(this.boss?.active ? [this.boss] : []),
+    ].sort((a, b) =>
+      Phaser.Math.Distance.Between(src.x, src.y, a.x, a.y) -
+      Phaser.Math.Distance.Between(src.x, src.y, b.x, b.y)
+    ) as Phaser.GameObjects.Sprite[]
+
+    if (allTargets.length === 0) return
+
+    for (let i = 0; i < 5; i++) {
+      this.time.delayedCall(i * 90, () => {
+        if (!src.active) return
+
+        const target = allTargets.find(t => t.active) ?? null
+        if (!target) return
+
+        const star = this.add.text(
+          src.x + Phaser.Math.Between(-18, 18),
+          src.y - Phaser.Math.Between(10, 40),
+          '★', {
+            fontSize: '38px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffd700',
+            stroke: '#aa6600',
+            strokeThickness: 3,
+          }
+        ).setOrigin(0.5).setDepth(12)
+
+        this.physics.add.existing(star)
+        const body = star.body as Phaser.Physics.Arcade.Body
+        body.setAllowGravity(false)
+
+        const angle = Phaser.Math.Angle.Between(star.x, star.y, target.x, target.y)
+        body.setVelocity(Math.cos(angle) * 500, Math.sin(angle) * 500)
+        this.tweens.add({ targets: star, angle: 360, duration: 400, repeat: -1 })
+
+        // Glowing shooting-star trail that follows the star automatically
+        const trail = this.add.particles(star.x, star.y, '__DEFAULT', {
+          lifespan: 300,
+          speed: 0,
+          scale: { start: 0.35, end: 0 },
+          alpha: { start: 0.85, end: 0 },
+          tint: [0xffd700, 0xffeeaa, 0xffffff, 0xff8800],
+          quantity: 2,
+          frequency: 18,
+          blendMode: 'ADD',
+        }).setDepth(11)
+        trail.startFollow(star)
+
+        let didHit = false
+        const destroyTrail = () => { trail.stopFollow(); trail.destroy() }
+        const onHit = () => {
+          if (didHit || !star.active) return
+          didHit = true
+          destroyTrail()
+          if (target === this.boss) {
+            if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+                (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+            SoundManager.bossHit()
+            this.boss!.hit()
+          } else {
+            SoundManager.enemyHit()
+            ;(target as Enemy).hit()
+            this.addScore(SCORE_ENEMY)
+          }
+          this.tweens.add({
+            targets: star, alpha: 0, scaleX: 2, scaleY: 2,
+            duration: 150, onComplete: () => { if (star.active) star.destroy() },
+          })
+        }
+
+        for (const e of this.enemies) {
+          if (e === target) { this.physics.add.overlap(star, e, onHit); break }
+        }
+        if (target === this.boss && this.boss?.active) {
+          this.physics.add.overlap(star, this.boss, onHit)
+        }
+
+        this.time.delayedCall(3000, () => {
+          if (!star.active) return
+          destroyTrail()
+          this.tweens.add({ targets: star, alpha: 0, duration: 200, onComplete: () => { if (star.active) star.destroy() } })
+        })
+      })
+    }
+  }
+
+  // ── Scarlett T-Rex transformation ────────────────────────────────────────────
+
+  private transformScarlettToTrex(player: Player) {
+    if (player.isTrex || player.isTransforming) return
+    player.isTransforming = true
+    player.setTexture('sheet-scarlett-transformer', 0)
+    player.play('scarlett-anim-transform')
+    player.once('animationcomplete-scarlett-anim-transform', () => {
+      if (!player.active) return
+      player.isTrex = true
+      player.isTransforming = false
+      player.setTexture('sheet-trex', 0)
+      player.play('trex-idle', true)
+    })
+  }
+
+  private untransformScarlett(player: Player) {
+    if (!player.isTrex || player.isTransforming) return
+    player.isTrex = false
+    player.isTransforming = true
+    player.setTexture('sheet-scarlett-transformer', 0)
+    player.play('scarlett-anim-untransform')
+    player.once('animationcomplete-scarlett-anim-untransform', () => {
+      if (!player.active) return
+      player.isTransforming = false
+    })
+  }
+
+  // ── Carter duplicate ability ─────────────────────────────────────────────────
+
+  private handleCharacterAbility(src: Player) {
+    if (src.charKey === 'carter') this.spawnCarterDuplicate(src)
+    else if (src.charKey === 'eric') {
+      if (src.isTruck) this.untransformEric(src)
+      else this.transformEricToTruck(src)
+    }
+    else if (src.charKey === 'conrad') this.spawnConradTruck(src)
+    else if (src.charKey === 'coco') this.handleCocoShadow(src)
+    else if (src.charKey === 'callum') this.spawnCallumNumber(src)
+    else if (src.charKey === 'abby') this.spawnAbbyStars(src)
+    else if (src.charKey === 'scarlett') {
+      if (src.isTrex) this.untransformScarlett(src)
+      else this.transformScarlettToTrex(src)
+    }
+    else this.doMeleeSwing(src)
+  }
+
+  // ── Eric truck transformation ─────────────────────────────────────────────
+
+  private transformEricToTruck(player: Player) {
+    if (player.isTruck || player.isTransforming) return
+
+    player.isTransforming = true
+    player.setTexture('sheet-eric-transformer', 0)
+    player.play('eric-anim-transform')
+
+    player.once('animationcomplete-eric-anim-transform', () => {
+      if (!player.active) return
+      player.isTruck = true
+      player.isTransforming = false
+      player.play('eric-anim-truck-idle', true)
+    })
+  }
+
+  private untransformEric(player: Player) {
+    if (!player.isTruck || player.isTransforming) return
+
+    player.isTruck = false
+    player.isTransforming = true
+    player.play('eric-anim-untransform')
+
+    player.once('animationcomplete-eric-anim-untransform', () => {
+      if (!player.active) return
+      player.isTransforming = false
+      // Releasing the lock lets updateAnimation() resume normal eric animations
+      // on the next frame, which auto-switches back to sheet-eric via the anim frames
+    })
+  }
+
+  private spawnCarterDuplicate(src: Player) {
+    const sheet = `sheet-${src.charKey}`
+    if (!this.textures.exists(sheet)) return
+    const dup = new CarterDuplicate(this, src.x, src.y, sheet)
+    dup.setFlipX(src.flipX)
+    this.carterDuplicates.push(dup)
+    this.physics.add.collider(dup, this.platforms)
+    this.tilemapLayers.forEach(l => this.physics.add.collider(dup, l))
+    this.enemies.forEach(e => {
+      this.physics.add.overlap(dup, e, () => dup.hit())
+    })
+    if (this.boss?.active) {
+      this.physics.add.overlap(dup, this.boss, () => dup.hit())
+    }
+    dup.on('fireLaser', (d: CarterDuplicate) => this.fireDuplicateLaser(d))
+    dup.on('duplicateDied', (d: CarterDuplicate) => {
+      this.carterDuplicates = this.carterDuplicates.filter(x => x !== d)
+    })
+  }
+
+  private fireDuplicateLaser(dup: CarterDuplicate) {
+    if (!dup.active) return
+
+    // Find nearest target
+    let target: Phaser.GameObjects.Sprite | null = null
+    let best = 800   // max laser range
+
+    for (const e of this.enemies) {
+      if (!e.active) continue
+      const d = Phaser.Math.Distance.Between(dup.x, dup.y, e.x, e.y)
+      if (d < best) { best = d; target = e }
+    }
+    if (this.boss?.active) {
+      const d = Phaser.Math.Distance.Between(dup.x, dup.y, this.boss.x, this.boss.y)
+      if (d < best) { best = d; target = this.boss }
+    }
+    if (!target) return
+
+    const tx = target.x
+    const ty = target.y - 20
+    const eyeX = dup.x + (dup.flipX ? -8 : 8)
+    const eyeY = dup.y - 18
+
+    const gfx = this.add.graphics().setDepth(15)
+    gfx.lineStyle(6, 0xff2200, 0.85)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    gfx.lineStyle(12, 0xff6600, 0.3)
+    gfx.lineBetween(eyeX, eyeY, tx, ty)
+    this.tweens.add({ targets: gfx, alpha: 0, duration: 250, onComplete: () => gfx.destroy() })
+
+    if (target === this.boss) {
+      if (this.cfg.bossDefeatedKey === 'celeryManDefeated' &&
+          (!this.registry.get('dadSaved') || !this.registry.get('momSaved'))) return
+      SoundManager.bossHit()
+      this.boss!.hit()
+    } else {
+      this.hitEnemy(target as Enemy, this.players[0] ?? this.players[0])
+    }
   }
 
   private fireCeleryStalk() {
@@ -2188,37 +3000,6 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => { if (orb.active) orb.destroy() } })
   }
 
-  // ── inhale ───────────────────────────────────────────────────────────────────
-
-  private checkInhale(p: Player) {
-    if (p.hasInhaled) return
-
-    // Block (destroy) enemy projectiles inside the inhale cone
-    const inhaleDir = p.flipX ? -1 : 1
-    ;(this.enemyProjectiles.getChildren() as Phaser.Physics.Arcade.Image[]).forEach(proj => {
-      if (!proj.active) return
-      const dx = proj.x - p.x
-      const dy = Math.abs(proj.y - p.y)
-      if (inhaleDir * dx > 0 && inhaleDir * dx <= p.inhaleRange() && dy < 55) proj.destroy()
-    })
-
-    for (const e of this.enemies) {
-      const dist = Phaser.Math.Distance.Between(p.x, p.y, e.x, e.y)
-      if (dist <= p.inhaleRange()) {
-        e.pullToward(p.x, p.y, Phaser.Math.Linear(200, INHALE_PULL_SPEED, 1 - dist / p.inhaleRange()))
-      } else {
-        e.stopPull()
-      }
-    }
-
-    for (const other of this.players) {
-      if (other === p) continue
-      if (Phaser.Math.Distance.Between(p.x, p.y, other.x, other.y) <= p.inhaleRange()) {
-        p.capturePlayer(other)
-        return
-      }
-    }
-  }
 
   // ── camera ──────────────────────────────────────────────────────────────────
 
@@ -2259,9 +3040,13 @@ export class GameScene extends Phaser.Scene {
     this.registry.set('persistedAbilities', null)
     this.registry.set('persistedHearts', null)
     this.registry.set('persistedBoosts', null)
-    this.registry.set('dragonDefeated', null)
-    this.registry.set('dadDefeated', null)
-    this.registry.set('momDefeated', null)
+    this.registry.set('skeletonKingDefeated', null)
+    this.registry.set('zombieKingDefeated', null)
+    this.registry.set('celeryManDefeated', null)
+    this.registry.set('dadSaved', null)
+    this.registry.set('momSaved', null)
+    this.registry.set('wormCount', 0)
+    this.registry.set('rolyPolyCount', 0)
     this.registry.set('runRooms', null)
     this.registry.set('runIndex', 0)
     this.registry.set('entryDir', null)
@@ -2287,8 +3072,6 @@ export class GameScene extends Phaser.Scene {
     this.gm.pause()
     this.physics.world.isPaused = true
     this.registry.set('score', this.score)
-    this.registry.set('persistedAbilities',
-      this.players.map(p => ({ ability: p.currentAbility, ammo: p.abilityAmmo })))
     this.registry.set('persistedHearts',
       this.players.map(p => p.hearts))
     this.registry.set('persistedBoosts',
@@ -2425,8 +3208,8 @@ export class GameScene extends Phaser.Scene {
         this.registry.set('persistedAbilities', null)
         this.registry.set('persistedHearts',    null)
         this.registry.set('score',              0)
-        this.registry.set('dadDefeated',        false)
-        this.registry.set('momDefeated',        false)
+        this.registry.set('zombieKingDefeated',  false)
+        this.registry.set('celeryManDefeated',   false)
         this.scene.start('MenuScene')
       })
     })
@@ -2479,8 +3262,8 @@ export class GameScene extends Phaser.Scene {
     if (keys['jump']?.isDown) p.jump()
     else p.jumpReleased()
 
-    p.setInhaling(!!keys['inhale']?.isDown)
-    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) p.swingMelee()
+    p.setShielding(!!keys['inhale']?.isDown)
+    if (Phaser.Input.Keyboard.JustDown(keys['ability'])) p.useCharacterAbility()
   }
 
   private handleGamepad(p: Player, pad: Phaser.Input.Gamepad.Gamepad) {
@@ -2493,7 +3276,7 @@ export class GameScene extends Phaser.Scene {
     if (pad.A) p.jump()
     else p.jumpReleased()
 
-    p.setInhaling(pad.buttons[3]?.pressed ?? false)
+    p.setShielding(pad.buttons[3]?.pressed ?? false)
   }
 
   private handleRemoteInput(p: Player, ri: RemoteInput) {
@@ -2505,8 +3288,8 @@ export class GameScene extends Phaser.Scene {
     if (ri.jump) p.jump()
     else         p.jumpReleased()
 
-    p.setInhaling(ri.inhale)
-    if (ri.ability) p.swingMelee()
+    p.setShielding(ri.inhale)
+    if (ri.ability) p.useCharacterAbility()
   }
 
   private setupGamepadEvents() {
@@ -2525,7 +3308,7 @@ export class GameScene extends Phaser.Scene {
 
         const player = this.players.find((_, i) => this.input.gamepad?.getPad(i) === pad)
         if (!player || !player.isAlive || player.isInhaled) return
-        if (button.index === 1) player.useAbility()
+        if (button.index === 1) player.useCharacterAbility()
         if (button.index === 2) player.swingMelee()
         // D-pad up (12) near throne door — same as pressing Up on keyboard
         if (button.index === 12 && this.cfg.isThrone) {
@@ -2565,11 +3348,20 @@ export class GameScene extends Phaser.Scene {
 
     const resumeAction = () => this.togglePause()
     const menuAction   = () => {
-      this.registry.set('runRooms', null)
-      this.registry.set('runIndex', 0)
-      this.registry.set('entryDir', null)
-      this.cameras.main.fadeOut(300, 0, 0, 0)
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'))
+      this.gm.resume()
+      this.physics.world.isPaused = false
+      this.registry.set('runRooms',             null)
+      this.registry.set('runIndex',             0)
+      this.registry.set('entryDir',             null)
+      this.registry.set('skeletonKingDefeated', null)
+      this.registry.set('zombieKingDefeated',   null)
+      this.registry.set('celeryManDefeated',    null)
+      this.registry.set('dadSaved',             null)
+      this.registry.set('momSaved',             null)
+      this.registry.set('wormCount',            0)
+      this.registry.set('rolyPolyCount',        0)
+      SoundManager.stopTrack()
+      this.scene.start('MenuScene')
     }
     resume.on('pointerdown', resumeAction)
     toMenu.on('pointerdown', menuAction)
@@ -2617,34 +3409,6 @@ export class GameScene extends Phaser.Scene {
     this.pauseCursor.setPosition(b.left - 12, b.centerY).setVisible(true)
   }
 
-  // ── inhale cone ───────────────────────────────────────────────────────────
-
-  private drawInhaleCone(g: Phaser.GameObjects.Graphics, p: Player) {
-    const t    = this.time.now
-    const dir  = p.flipX ? -1 : 1
-    const ox   = p.x
-    const oy   = p.y
-    const len  = p.inhaleRange()
-
-    const a1 = 0.13 + 0.07 * Math.sin(t / 110)
-    g.fillStyle(0x55ddff, a1)
-    g.fillTriangle(ox, oy, ox + dir * len, oy - 72, ox + dir * len, oy + 72)
-
-    const a2 = 0.28 + 0.12 * Math.sin(t / 80 + Math.PI)
-    g.fillStyle(0xaaf0ff, a2)
-    g.fillTriangle(ox, oy, ox + dir * len, oy - 36, ox + dir * len, oy + 36)
-
-    for (let i = 0; i < 4; i++) {
-      const phase  = ((t / 380) + i * 0.25) % 1
-      const dist   = len * (1 - phase)
-      const spread = 50 * (1 - phase * 0.65)
-      const alpha  = 0.65 * Math.sin(phase * Math.PI)
-      const sx     = ox + dir * dist
-      g.lineStyle(2, 0xffffff, alpha)
-      g.lineBetween(sx, oy - spread, sx, oy + spread)
-    }
-  }
-
   // ── update ────────────────────────────────────────────────────────────────
 
   update(_t: number, _dt: number) {
@@ -2666,11 +3430,65 @@ export class GameScene extends Phaser.Scene {
     this.players.forEach((p, i) => {
       p.update()
 
-      const coneGfx = this.inhaleGraphics[i]
-      if (coneGfx) {
-        coneGfx.clear()
-        if (p.isAlive && p.inhaling && !p.hasInhaled && !p.isInhaled) {
-          this.drawInhaleCone(coneGfx, p)
+      const shieldGfx = this.shieldGraphics[i]
+      if (shieldGfx) {
+        shieldGfx.clear()
+        if (p.isTruck) {
+          const moving = Math.abs((p.body as Phaser.Physics.Arcade.Body).velocity.x) > 10
+          const animKey = moving ? 'eric-anim-truck-move' : 'eric-anim-truck-idle'
+          if (p.anims.currentAnim?.key !== animKey) p.play(animKey, true)
+        }
+        if (p.isTrex) {
+          const moving = Math.abs((p.body as Phaser.Physics.Arcade.Body).velocity.x) > 10
+          const animKey = moving ? 'trex-walk' : 'trex-idle'
+          if (p.anims.currentAnim?.key !== animKey) p.play(animKey, true)
+        }
+
+      if (p.isAlive && p.shielding && !p.isInhaled) {
+          const t   = this.time.now
+          const R   = 58   // shield radius
+
+          // Soft inner fill — pulses gently
+          const fill = 0.22 + 0.10 * Math.sin(t / 130)
+          shieldGfx.fillStyle(0x55bbff, fill)
+          shieldGfx.fillCircle(p.x, p.y, R)
+
+          // Bright outer ring
+          shieldGfx.lineStyle(3, 0xaaeeff, 0.85 + 0.15 * Math.sin(t / 90))
+          shieldGfx.strokeCircle(p.x, p.y, R)
+
+          // Second inner ring
+          shieldGfx.lineStyle(1, 0xffffff, 0.30 + 0.20 * Math.sin(t / 70 + 1))
+          shieldGfx.strokeCircle(p.x, p.y, R - 8)
+
+          // Orbiting star-points (6 points spaced evenly, each a small 4-pointed star)
+          const STAR_COUNT = 6
+          for (let s = 0; s < STAR_COUNT; s++) {
+            const angle  = (t / 600) + (s / STAR_COUNT) * Math.PI * 2
+            const twinkle = 0.5 + 0.5 * Math.sin(t / 180 + s * 1.3)
+            const sx = p.x + Math.cos(angle) * R
+            const sy = p.y + Math.sin(angle) * R
+            const sr = 3 + 2 * twinkle   // star radius pulses
+
+            shieldGfx.fillStyle(0xffffff, 0.7 + 0.3 * twinkle)
+            // Four-pointed cross star
+            shieldGfx.fillRect(sx - sr / 2, sy - 1, sr, 2)
+            shieldGfx.fillRect(sx - 1, sy - sr / 2, 2, sr)
+          }
+
+          // Small inner sparkles at fixed angles, randomly twinkling
+          const SPARK_COUNT = 8
+          for (let s = 0; s < SPARK_COUNT; s++) {
+            const angle  = (t / 900 + s * 0.5) + s * (Math.PI * 2 / SPARK_COUNT)
+            const dist   = (R - 16) + 6 * Math.sin(t / 200 + s * 0.7)
+            const alpha  = 0.2 + 0.6 * Math.abs(Math.sin(t / 250 + s * 1.1))
+            shieldGfx.fillStyle(0xddeeff, alpha)
+            shieldGfx.fillRect(
+              p.x + Math.cos(angle) * dist - 1,
+              p.y + Math.sin(angle) * dist - 1,
+              2, 2,
+            )
+          }
         }
       }
 
@@ -2703,8 +3521,13 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      if (p.inhaling) this.checkInhale(p)
-      else this.enemies.forEach(e => e.stopPull())
+      if (p.shielding) {
+        // Absorb enemy projectiles while shielding
+        ;(this.enemyProjectiles.getChildren() as Phaser.Physics.Arcade.Image[]).forEach(proj => {
+          if (!proj.active) return
+          if (Phaser.Math.Distance.Between(p.x, p.y, proj.x, proj.y) < 50) proj.destroy()
+        })
+      }
 
       // Exit boundary detection (all modes except continuous worldMap)
       const remoteIds2: number[] = this.registry.get('remotePlayers') ?? []
@@ -2802,6 +3625,9 @@ export class GameScene extends Phaser.Scene {
       this.boss.update()
     }
 
+    this.updateConradTrucks()
+    this.updateCocoShadow()
+    this.updateCallumNumbers()
     this.ui.update(this.players)
 
     // Debug: log first player position every 2 seconds

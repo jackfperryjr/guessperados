@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundManager } from '../audio/SoundManager'
+import { generateRun } from '../levels'
 
 type Screen = 'main' | 'controls'
 
@@ -25,6 +26,7 @@ export class MenuScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale
 
+    this.cameras.main.fadeIn(400, 0, 0, 0)
     this.add.image(width / 2, height / 2, 'logo').setDisplaySize(width, height)
 
     this.gpCursor = this.add.text(0, 0, '►', {
@@ -40,6 +42,9 @@ export class MenuScene extends Phaser.Scene {
     this.showScreen('main')
     this.setupGamepad()
     this.setupControllerStatus()
+
+    // Dev shortcut: press 4 to jump directly to Level 4 (outside world)
+    this.input.keyboard?.once('keydown-FOUR', () => this.startLevel4())
 
     SoundManager.whenUnlocked(() => {
       SoundManager.playIntroTheme()
@@ -221,6 +226,19 @@ export class MenuScene extends Phaser.Scene {
     btn.on('pointerover', () => btn.setColor(CLR_TITLE))
     btn.on('pointerout',  () => btn.setColor(CLR_SELECT))
     return btn
+  }
+
+  private startLevel4() {
+    SoundManager.unlock()
+    const rooms = generateRun()
+    this.registry.set('runRooms',    rooms)
+    this.registry.set('runIndex',    6)       // LEVEL4_WORLD_ROOM is index 6
+    this.registry.set('entryDir',    null)    // null → no left exit added, spawns at safe center
+    this.registry.set('playerCount', 1)
+    this.registry.set('lives',       3)
+    this.registry.set('score',       0)
+    this.cameras.main.fadeOut(400, 0, 0, 0)
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('CharacterSelectScene'))
   }
 
   private startGame(playerCount: number) {
